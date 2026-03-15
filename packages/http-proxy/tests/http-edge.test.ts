@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import type * as httpTypes from 'node:http';
 import { HttpInterceptor } from '../src/index.js';
-import { VirtualClock } from '../../clock/src/index.js';
+import { VirtualClock } from '@simnode/clock';
 
 const _require = createRequire(import.meta.url);
 const http: typeof httpTypes = _require('node:http');
