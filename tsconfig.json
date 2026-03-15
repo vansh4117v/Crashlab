@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/clock" },
+    { "path": "packages/random" },
+    { "path": "packages/http-proxy" },
+    { "path": "packages/scheduler" },
+    { "path": "packages/tcp" }
+  ]
+}
