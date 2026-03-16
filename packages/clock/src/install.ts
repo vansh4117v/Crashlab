@@ -24,6 +24,9 @@ export function install(clockOrStart?: VirtualClock | number): ClockInstallResul
     clearTimeout: globalThis.clearTimeout,
     setInterval: globalThis.setInterval,
     clearInterval: globalThis.clearInterval,
+    setImmediate: globalThis.setImmediate,
+    clearImmediate: globalThis.clearImmediate,
+    nextTick: globalThis.process?.nextTick,
     performanceNow: globalThis.performance.now.bind(globalThis.performance),
   };
 
@@ -46,6 +49,15 @@ export function install(clockOrStart?: VirtualClock | number): ClockInstallResul
 
   (globalThis as any).clearInterval = (id: number) => clock.clearInterval(id);
 
+  if (typeof globalThis.setImmediate !== 'undefined') {
+    (globalThis as any).setImmediate = (cb: (...a: unknown[]) => void, ...args: unknown[]) => clock.setImmediate(cb, ...args);
+    (globalThis as any).clearImmediate = (id: number) => clock.clearImmediate(id);
+  }
+
+  if (globalThis.process && typeof globalThis.process.nextTick === 'function') {
+    globalThis.process.nextTick = (cb: (...a: unknown[]) => void, ...args: unknown[]) => clock.nextTick(cb, ...args);
+  }
+
   globalThis.performance.now = () => clock.now();
 
   function uninstall(): void {
@@ -54,6 +66,9 @@ export function install(clockOrStart?: VirtualClock | number): ClockInstallResul
     globalThis.clearTimeout = originals.clearTimeout;
     globalThis.setInterval = originals.setInterval;
     globalThis.clearInterval = originals.clearInterval;
+    if (originals.setImmediate) globalThis.setImmediate = originals.setImmediate;
+    if (originals.clearImmediate) globalThis.clearImmediate = originals.clearImmediate;
+    if (globalThis.process && originals.nextTick) globalThis.process.nextTick = originals.nextTick;
     globalThis.performance.now = originals.performanceNow;
   }
 

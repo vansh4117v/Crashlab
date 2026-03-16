@@ -15,6 +15,23 @@ export interface TimerEntry {
  * Replaces all time primitives so that `advance(duration)` fires timers
  * deterministically, in scheduled-time order.  Timers that schedule new
  * timers within the same advance window ARE picked up and executed in
+import { MinHeap } from './MinHeap.js';
+
+/** Internal timer entry stored in the heap. */
+export interface TimerEntry {
+  id: number;
+  callback: (...args: unknown[]) => void;
+  scheduledTime: number;
+  interval?: number;
+  args: unknown[];
+}
+
+/**
+ * A manually-controllable virtual clock.
+ *
+ * Replaces all time primitives so that `advance(duration)` fires timers
+ * deterministically, in scheduled-time order.  Timers that schedule new
+ * timers within the same advance window ARE picked up and executed in
  * the correct order (the heap is re-checked after every callback).
  */
 export class VirtualClock {
@@ -23,6 +40,11 @@ export class VirtualClock {
   private _frozen = false;
   private _timers: MinHeap<TimerEntry>;
   private readonly _cancelledIds = new Set<number>();
+
+  private readonly _virtualNextTickQueue: Array<(...args: unknown[]) => void> = [];
+  private readonly _virtualImmediateQueue: Array<{ id: number; callback: (...args: unknown[]) => void; args: unknown[]; }> = [];
+  private _nextImmediateId = 1;
+  private readonly _cancelledImmediates = new Set<number>();
 
   constructor(startTime: number = 0) {
     this._now = startTime;
@@ -52,28 +74,46 @@ export class VirtualClock {
    * Advance the clock by `duration` ms, firing every timer whose
    * scheduled time falls within `[now, now + duration]` in order.
    */
-  advance(duration: number): void {
-    this.advanceTo(this._now + duration);
+  async advance(duration: number): Promise<void> {
+    await this.advanceTo(this._now + duration);
   }
 
   /**
    * Jump to an absolute virtual timestamp, draining timers along the way.
    */
-  advanceTo(timestamp: number): void {
+  async advanceTo(timestamp: number): Promise<void> {
     if (this._frozen) return;
     if (timestamp < this._now) return; // never go backward
+    
     while (this._timers.size > 0) {
       const next = this._timers.peek()!;
       if (next.scheduledTime > timestamp) break;
-      this._timers.pop();
-      // Skip timers cancelled during a previous callback in this advance.
+      
+      // If cancelled while it was in queue
       if (this._cancelledIds.has(next.id)) {
+        this._timers.pop();
         this._cancelledIds.delete(next.id);
         continue;
       }
+      
+      // Pop right before execution
+      this._timers.pop();
+      if (this._cancelledIds.has(next.id)) {
+         this._cancelledIds.delete(next.id);
+         continue;
+      }
+      
       this._now = next.scheduledTime;
-      next.callback(...next.args);
-      // If this was an interval AND not cancelled during the callback,
+      
+      try {
+        next.callback(...next.args);
+      } catch (err) {
+        throw new Error(`VirtualClock timer callback failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      }
+
+      await this._flushMicrotasks();
+
+      // If this was an interval AND not cancelled during the callback or microtasks,
       // reschedule for the next tick.
       if (next.interval !== undefined && !this._cancelledIds.has(next.id)) {
         this._timers.push({
@@ -82,8 +122,52 @@ export class VirtualClock {
         });
       }
       this._cancelledIds.delete(next.id);
+
+      await this._flushImmediates();
     }
     this._now = timestamp;
+    
+    // End of advance flush
+    await this._flushMicrotasks();
+    await this._flushImmediates();
+  }
+
+  private async _flushMicrotasks(): Promise<void> {
+    let draining = true;
+    while (draining) {
+      while (this._virtualNextTickQueue.length > 0) {
+        const cb = this._virtualNextTickQueue.shift()!;
+        try {
+          cb();
+        } catch (err) {
+          throw new Error(`VirtualClock nextTick failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+        }
+      }
+      // Execute V8 microtasks
+      await Promise.resolve();
+      if (this._virtualNextTickQueue.length === 0) {
+        draining = false;
+      }
+    }
+  }
+
+  private async _flushImmediates(): Promise<void> {
+    const immediates = [...this._virtualImmediateQueue];
+    this._virtualImmediateQueue.length = 0;
+
+    for (const imm of immediates) {
+      if (this._cancelledImmediates.has(imm.id)) {
+        this._cancelledImmediates.delete(imm.id);
+        continue;
+      }
+      try {
+        imm.callback(...imm.args);
+      } catch (err) {
+        throw new Error(`VirtualClock immediate failed: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      }
+      await this._flushMicrotasks();
+      this._cancelledImmediates.delete(imm.id);
+    }
   }
 
   freeze(): void {
@@ -137,6 +221,20 @@ export class VirtualClock {
     this._timers.remove((t) => t.id === id);
   }
 
+  setImmediate(callback: (...args: unknown[]) => void, ...args: unknown[]): number {
+    const id = this._nextImmediateId++;
+    this._virtualImmediateQueue.push({ id, callback, args });
+    return id;
+  }
+
+  clearImmediate(id: number): void {
+    this._cancelledImmediates.add(id);
+  }
+
+  nextTick(callback: (...args: unknown[]) => void, ...args: unknown[]): void {
+    this._virtualNextTickQueue.push(() => callback(...args));
+  }
+
   // lifecycle
 
   reset(startTime: number = 0): void {
@@ -148,5 +246,10 @@ export class VirtualClock {
         ? a.scheduledTime - b.scheduledTime
         : a.id - b.id,
     );
+    this._cancelledIds.clear();
+    this._virtualNextTickQueue.length = 0;
+    this._virtualImmediateQueue.length = 0;
+    this._cancelledImmediates.clear();
+    this._nextImmediateId = 1;
   }
 }
