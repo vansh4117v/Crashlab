@@ -1,12 +1,15 @@
 import * as net from 'node:net';
+import * as dns from 'node:dns';
 import { createRequire } from 'node:module';
 import { VirtualSocket } from './VirtualSocket.js';
+import { patchDns, registerMockedHost, clearMockedHosts, dnsConfig } from './dns.js';
 import type { IClock, IScheduler, TcpMockConfig } from './types.js';
 import { SimNodeUnmockedTCPConnectionError } from './types.js';
 
 // CJS reference for mutable patching (same technique as @simnode/http-proxy)
 const _require = createRequire(import.meta.url);
 const netCjs = _require('node:net') as typeof net;
+const dnsCjs = _require('node:dns') as typeof dns;
 
 export interface TcpInterceptorOptions {
   clock?: IClock;
@@ -31,6 +34,9 @@ export class TcpInterceptor {
   private _origCreateConnection?: typeof net.createConnection;
   private _origConnect?: typeof net.connect;
   private _origSocketConnect?: typeof net.Socket.prototype.connect;
+  private _origDnsLookup?: any;
+  private _origDnsResolve?: any;
+  private _origDnsResolve4?: any;
 
   constructor(opts?: TcpInterceptorOptions) {
     this._clock = opts?.clock;
@@ -48,6 +54,8 @@ export class TcpInterceptor {
   mock(target: string, config: TcpMockConfig): this {
     const key = normalizeTarget(target);
     this._mocks.set(key, config);
+    const hostname = key.split(':')[0];
+    if (hostname) registerMockedHost(hostname);
     return this;
   }
 
@@ -55,6 +63,12 @@ export class TcpInterceptor {
   reset(): void {
     this._mocks.clear();
     this._sockets.length = 0;
+    clearMockedHosts();
+  }
+
+  /** Expose DNS config */
+  get dnsConfig(): { throwOnUnmocked: boolean } {
+     return dnsConfig;
   }
 
   /** All VirtualSockets created during this session. */
@@ -68,6 +82,31 @@ export class TcpInterceptor {
     this._origCreateConnection = netCjs.createConnection;
     this._origConnect = netCjs.connect;
     this._origSocketConnect = netCjs.Socket.prototype.connect;
+    
+    this._origDnsLookup = dns.lookup;
+    this._origDnsResolve = dns.resolve;
+    this._origDnsResolve4 = dns.resolve4;
+    
+    // Register all currently mocked hosts
+    for (const key of this._mocks.keys()) {
+        const hostname = key.split(':')[0];
+        if (hostname) registerMockedHost(hostname);
+    }
+    
+    const { customLookup, customResolve, customResolve4 } = patchDns({
+        lookup: this._origDnsLookup,
+        resolve: this._origDnsResolve,
+        resolve4: this._origDnsResolve4,
+    });
+    
+    (dnsCjs as any).lookup = customLookup;
+    (dnsCjs as any).resolve = customResolve;
+    (dnsCjs as any).resolve4 = customResolve4;
+    if (dnsCjs.promises) {
+        (dnsCjs.promises as any).lookup = customLookup;
+        (dnsCjs.promises as any).resolve = customResolve;
+        (dnsCjs.promises as any).resolve4 = customResolve4;
+    }
 
     const self = this;
 
@@ -105,6 +144,19 @@ export class TcpInterceptor {
     if (this._origCreateConnection) netCjs.createConnection = this._origCreateConnection;
     if (this._origConnect) netCjs.connect = this._origConnect;
     if (this._origSocketConnect) netCjs.Socket.prototype.connect = this._origSocketConnect;
+    
+    if (this._origDnsLookup) {
+        (dnsCjs as any).lookup = this._origDnsLookup;
+        if (dnsCjs.promises) (dnsCjs.promises as any).lookup = this._origDnsLookup;
+    }
+    if (this._origDnsResolve) {
+        (dnsCjs as any).resolve = this._origDnsResolve;
+        if (dnsCjs.promises) (dnsCjs.promises as any).resolve = this._origDnsResolve;
+    }
+    if (this._origDnsResolve4) {
+        (dnsCjs as any).resolve4 = this._origDnsResolve4;
+        if (dnsCjs.promises) (dnsCjs.promises as any).resolve4 = this._origDnsResolve4;
+    }
   }
 
   // internal
