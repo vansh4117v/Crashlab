@@ -1,4 +1,8 @@
 import { mulberry32 } from './mulberry32.js';
+import { createRequire } from 'node:module';
+
+const _require = createRequire(import.meta.url);
+const cryptoCjs = _require('node:crypto') as typeof import('node:crypto');
 
 /**
  * Deterministic random number generator backed by mulberry32.
@@ -8,6 +12,7 @@ import { mulberry32 } from './mulberry32.js';
 export class SeededRandom {
   private readonly _next: () => number;
   private _originalRandom: (() => number) | null = null;
+  private _originalRandomBytes: any = null;
 
   constructor(seed: number) {
     this._next = mulberry32(seed);
@@ -38,17 +43,34 @@ export class SeededRandom {
     return out;
   }
 
-  /** Replace `Math.random` with this PRNG. */
+  /** Replace `Math.random` and `crypto.randomBytes` with this PRNG. */
   install(): void {
     this._originalRandom = Math.random;
     Math.random = () => this._next();
+
+    this._originalRandomBytes = cryptoCjs.randomBytes;
+    (cryptoCjs as any).randomBytes = (size: number, cb?: any) => {
+      const buf = Buffer.alloc(size);
+      for (let i = 0; i < size; i++) {
+        buf[i] = Math.floor(this._next() * 256);
+      }
+      if (cb) {
+        process.nextTick(() => cb(null, buf));
+        return undefined as any;
+      }
+      return buf;
+    };
   }
 
-  /** Restore the original `Math.random`. */
+  /** Restore the originals. */
   uninstall(): void {
     if (this._originalRandom) {
       Math.random = this._originalRandom;
       this._originalRandom = null;
+    }
+    if (this._originalRandomBytes) {
+      (cryptoCjs as any).randomBytes = this._originalRandomBytes;
+      this._originalRandomBytes = null;
     }
   }
 }
