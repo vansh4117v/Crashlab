@@ -123,20 +123,32 @@ export class FaultInjector {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Call tcp.addLocalServer() and silently swallow listen errors (e.g. EADDRINUSE).
- * The in-process interceptor still handles connections even if the loopback
- * server can't bind.
+ * Call tcp.addLocalServer() and record a timeline WARNING if the loopback
+ * server fails to bind (e.g. EADDRINUSE from a real database on the same port).
+ * In-process drivers (pg, mongoose, ioredis) are unaffected because they are
+ * intercepted client-side; only out-of-process binaries (e.g. Prisma engine)
+ * may fail to connect.
  */
-function _tryAddLocalServer(tcp: TcpInterceptor, port: number, handler: import('@simnode/tcp').TcpMockHandler): void {
+function _tryAddLocalServer(
+  tcp: TcpInterceptor,
+  port: number,
+  handler: import('@simnode/tcp').TcpMockHandler,
+  timeline: Timeline,
+): void {
   try {
-    const handle = tcp.addLocalServer(port, handler);
-    // Attach an error listener to the underlying net.Server to swallow EADDRINUSE
-    // (addLocalServer returns a handle but doesn't expose the raw server).
-    // The only way to intercept the listen error is via an 'error' event on the
-    // returned handle's internal server. Since the handle doesn't expose it, we
-    // tolerate that stopLocalServers() may encounter a non-listening server and
-    // guard there instead.
-    void handle;
+    tcp.addLocalServer(port, handler, 0, (err) => {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EADDRINUSE' || code === 'EACCES') {
+        timeline.record({
+          timestamp: 0,
+          type: 'WARNING',
+          detail:
+            `Port ${port} already in use (${code}) — out-of-process binaries ` +
+            `(e.g. Prisma) may fail to connect, but in-process drivers ` +
+            `(pg, mongoose, ioredis) will still function via the client-side interceptor.`,
+        });
+      }
+    });
   } catch {
     // Synchronous errors (e.g. invalid port) are ignored
   }
@@ -193,9 +205,9 @@ export async function createEnv(seed: number, mongoOpts?: MongoOpts): Promise<Si
 
   // Start loopback TCP servers for out-of-process binaries (e.g. Prisma engine).
   // Errors (e.g. EADDRINUSE) are swallowed — in-process interceptor still works.
-  _tryAddLocalServer(tcp, 5432,  pg.createHandler());
-  _tryAddLocalServer(tcp, 6379,  redis.createHandler());
-  _tryAddLocalServer(tcp, 27017, mongo.createHandler());
+  _tryAddLocalServer(tcp, 5432,  pg.createHandler(),    timeline);
+  _tryAddLocalServer(tcp, 6379,  redis.createHandler(), timeline);
+  _tryAddLocalServer(tcp, 27017, mongo.createHandler(), timeline);
 
   return env;
 }

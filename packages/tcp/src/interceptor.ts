@@ -132,7 +132,7 @@ export class TcpInterceptor {
    * The returned `LocalServerHandle` lets the caller stop this specific server.
    * `uninstall()` automatically stops all local servers.
    */
-  addLocalServer(port: number, handler: TcpMockHandler, latency = 0): LocalServerHandle {
+  addLocalServer(port: number, handler: TcpMockHandler, latency = 0, onError?: (err: Error) => void): LocalServerHandle {
     if (this._localServers.has(port)) {
       // Already listening — return a handle to the existing server
       const existing = this._localServers.get(port)!;
@@ -184,7 +184,7 @@ export class TcpInterceptor {
       });
     });
 
-    server.on('error', () => { /* swallow EADDRINUSE / EACCES so the process doesn't crash */ });
+    server.on('error', (err: Error) => { onError?.(err); });
     server.listen(port, '127.0.0.1');
     this._localServers.set(port, server);
 

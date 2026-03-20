@@ -101,34 +101,39 @@ export class Simulation {
     }
   }
 
-  private _runScenario(scenario: ScenarioDef, seed: number, mongo: MongoServerInfo): Promise<WorkerResult> {
-    return new Promise((resolve, reject) => {
-      const workerPayload: Record<string, unknown> = {
-        seed,
-        scenarioName: scenario.name,
-        timeout: this._timeout,
-        mongoHost: mongo.host,
-        mongoPort: mongo.port,
-        mongoDbName: `sim_db_${seed}`,
-      };
+  private async _runScenario(scenario: ScenarioDef, seed: number, mongo: MongoServerInfo): Promise<WorkerResult> {
+    const workerPayload: Record<string, unknown> = {
+      seed,
+      scenarioName: scenario.name,
+      timeout: this._timeout,
+      mongoHost: mongo.host,
+      mongoPort: mongo.port,
+      mongoDbName: `sim_db_${seed}`,
+    };
 
-      if (scenario.path) {
-        workerPayload.scenarioPath = scenario.path;
-      } else {
-        // Legacy inline function — serialised for vm eval
-        workerPayload.fnSource = scenario.fn!.toString();
-      }
+    if (scenario.path) {
+      workerPayload.scenarioPath = scenario.path;
+    } else {
+      // Legacy inline function — serialised for vm eval
+      workerPayload.fnSource = scenario.fn!.toString();
+    }
 
-      const worker = new Worker(WORKER_SCRIPT, { workerData: workerPayload });
+    const worker = new Worker(WORKER_SCRIPT, { workerData: workerPayload });
 
-      worker.once('message', (result: WorkerResult) => resolve(result));
-      worker.once('error',   (err)                   => reject(err));
-      worker.once('exit',    (code) => {
-        if (code !== 0) {
-          reject(new Error(`Worker exited with code ${code} for scenario "${scenario.name}"`));
-        }
+    try {
+      return await new Promise<WorkerResult>((resolve, reject) => {
+        worker.once('message', (result: WorkerResult) => resolve(result));
+        worker.once('error',   (err)                   => reject(err));
+        worker.once('exit',    (code) => {
+          if (code !== 0) {
+            reject(new Error(`Worker exited with code ${code} for scenario "${scenario.name}"`));
+          }
+        });
       });
-    });
+    } finally {
+      // Always terminate — prevents zombie workers on timeout, error, or early exit.
+      await worker.terminate();
+    }
   }
 }
 

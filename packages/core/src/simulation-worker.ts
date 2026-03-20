@@ -109,6 +109,9 @@ async function main(): Promise<void> {
   } catch (err) {
     passed = false;
     error = err instanceof Error ? err.message : String(err);
+    if (err instanceof Error && err.name === 'SimNodeUnsupportedProtocolError') {
+      env.timeline.record({ timestamp: env.clock.now(), type: 'BLOCKED_PROTOCOL', detail: error });
+    }
     env.timeline.record({ timestamp: env.clock.now(), type: 'FAIL', detail: error });
   } finally {
     patches.restore();
