@@ -53,6 +53,22 @@ export function startupResponse(): Buffer {
   ]);
 }
 
+// Extended protocol response messages
+export const parseComplete  = (): Buffer => pgMsg('1', Buffer.alloc(0));
+export const bindComplete   = (): Buffer => pgMsg('2', Buffer.alloc(0));
+export const noData         = (): Buffer => pgMsg('n', Buffer.alloc(0));
+
+/**
+ * Extract the portal name from an Execute message payload so that
+ * PgConnection can look up the prepared SQL.  Returns empty string
+ * (unnamed portal) when no explicit portal name was given.
+ */
+export function parseExecuteMsg(payload: Buffer): string {
+  // Execute: portal-name\0 + maxRows(Int32)
+  const nul = payload.indexOf(0);
+  return nul > 0 ? payload.toString('utf8', 0, nul) : '';
+}
+
 export function parseStartupMsg(data: Buffer): { isSSL: boolean } | { user: string; database: string } {
   if (data.length >= 8 && data.readInt32BE(4) === 80877103) return { isSSL: true };
   let off = 8;

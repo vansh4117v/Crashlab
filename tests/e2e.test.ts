@@ -126,38 +126,47 @@ describe('Redis concurrent INCR', () => {
 });
 
 /* ── C) Simulation seed replay ─────────────────────── */
+// NOTE: Scenario functions run inside a Worker thread — closures over
+// variables defined outside the scenario body are NOT available.
+// Results must be communicated exclusively via env.timeline.
 
 describe('Simulation seed replay', () => {
-  it('same seed → identical random values and timeline', async () => {
+  it('same seed → identical random values and timeline', async () => { // runs 2 workers
+
     const sim = new Simulation();
-    const runs: Array<{ vals: number[]; timeline: string }> = [];
 
     sim.scenario('determinism', async (env) => {
       const vals = [env.random.next(), env.random.next(), env.random.next()];
       env.timeline.record({ timestamp: 0, type: 'DATA', detail: vals.join(',') });
-      runs.push({ vals, timeline: '' });
     });
 
-    await sim.replay({ seed: 42, scenario: 'determinism' });
-    const first = { ...runs[0] };
-    runs.length = 0;
-    await sim.replay({ seed: 42, scenario: 'determinism' });
-    expect(runs[0].vals).toEqual(first.vals);
-  });
+    const r1 = await sim.replay({ seed: 42, scenario: 'determinism' });
+    const r2 = await sim.replay({ seed: 42, scenario: 'determinism' });
+
+    // Extract the DATA line from each timeline and compare
+    const extractData = (tl: string): string => tl.match(/DATA: ([^\n]+)/)?.[1] ?? '';
+    expect(extractData(r1.scenarios[0].timeline)).toBe(extractData(r2.scenarios[0].timeline));
+    expect(extractData(r1.scenarios[0].timeline)).not.toBe('');
+  }, 30_000);
 });
 
 /* ── D) Unmocked TCP throws ────────────────────────── */
+// The scenario imports `node:net` directly inside the worker context so it
+// does not need the outer-scope `net` or `SimNodeUnmockedTCPConnectionError`.
 
 describe('Unmocked TCP safety', () => {
   it('throws SimNodeUnmockedTCPConnectionError during simulation', async () => {
     const sim = new Simulation();
     sim.scenario('unmocked', async (env) => {
-      env.tcp.install();
+      // env.tcp is already installed by the Simulation runner (simulation-worker.ts).
+      // require() is injected into the vm sandbox by the worker.
+      const net = require('node:net');
       try {
         net.createConnection(9999, 'unknown.host');
         throw new Error('Should not reach');
-      } catch (e) {
-        if (e instanceof SimNodeUnmockedTCPConnectionError) {
+      } catch (e: unknown) {
+        const err = e as { name?: string; message?: string };
+        if (err.name === 'SimNodeUnmockedTCPConnectionError') {
           env.timeline.record({ timestamp: 0, type: 'GUARD', detail: 'Correctly blocked' });
           return;
         }
@@ -171,19 +180,23 @@ describe('Unmocked TCP safety', () => {
 });
 
 /* ── E) Filesystem disk full injection ───────────────── */
+// Use dynamic import inside the scenario so the worker has access to node:fs.
 
 describe('Filesystem disk full', () => {
   it('app handles ENOSPC gracefully', async () => {
     const sim = new Simulation();
     sim.scenario('disk full', async (env) => {
       env.faults.diskFull('/data/log.txt');
+      // env.fs is already installed by the worker; re-install is a no-op.
       env.fs.install();
-      const fs = _require('node:fs') as typeof import('node:fs');
+      // require() is injected into the vm sandbox by the worker.
+      const fs = require('node:fs');
       try {
         fs.writeFileSync('/data/log.txt', 'entry');
         throw new Error('Should have thrown');
-      } catch (e: any) {
-        if (e.code === 'ENOSPC') {
+      } catch (e: unknown) {
+        const err = e as { code?: string };
+        if (err.code === 'ENOSPC') {
           env.timeline.record({ timestamp: 0, type: 'HANDLED', detail: 'ENOSPC caught' });
           return;
         }

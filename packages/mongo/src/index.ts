@@ -11,6 +11,7 @@
  */
 
 import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@simnode/tcp';
+import * as net from 'node:net';
 
 export class SimNodeUnsupportedMongoFeature extends Error {
   constructor(detail: string) {
@@ -69,7 +70,7 @@ export function decodeBson(buf: Buffer, offset = 0): BsonDoc {
 
     switch (type) {
       case BSON_FLOAT64: {
-        doc[key] = buf.readDoubleLe ? (buf as any).readDoubleLe(pos) : buf.readDoubleLE(pos);
+        doc[key] = buf.readDoubleLE(pos);
         pos += 8;
         break;
       }
@@ -262,13 +263,12 @@ function parseOpQuery(body: Buffer): { collection: string; query: BsonDoc } {
 }
 
 // ---------------------------------------------------------------------------
-// MongoStore — in-memory collection store
+// MongoStore — legacy in-memory store (kept for seedData / direct test access)
 // ---------------------------------------------------------------------------
 
 type MongoDoc = Record<string, unknown>;
 
 export class MongoStore {
-  // dbName → collectionName → docs
   private _dbs = new Map<string, Map<string, MongoDoc[]>>();
   private _idCounter = 1;
 
@@ -281,160 +281,7 @@ export class MongoStore {
 
   seedData(db: string, collection: string, docs: MongoDoc[]): void {
     const coll = this.getCollection(db, collection);
-    for (const doc of docs) {
-      coll.push({ _id: this._idCounter++, ...doc });
-    }
-  }
-
-  execCommand(dbName: string, cmd: BsonDoc): BsonDoc {
-    const cmdName = Object.keys(cmd).find(k =>
-      ['find','insert','update','delete','drop','listCollections',
-       'createCollection','ping','isMaster','hello','getMore',
-       'endSessions','ismaster'].includes(k)
-    );
-
-    if (!cmdName) {
-      throw new SimNodeUnsupportedMongoFeature(`Command: ${Object.keys(cmd)[0] ?? 'unknown'}`);
-    }
-
-    switch (cmdName) {
-      case 'ping':
-      case 'isMaster':
-      case 'ismaster':
-      case 'hello':
-        return {
-          ok: 1,
-          isWritablePrimary: true,
-          ismaster: true,
-          maxBsonObjectSize: 16777216,
-          maxMessageSizeBytes: 48000000,
-          maxWriteBatchSize: 100000,
-          minWireVersion: 0,
-          maxWireVersion: 17,
-          readOnly: false,
-          connectionId: 1,
-        };
-
-      case 'endSessions':
-        return { ok: 1 };
-
-      case 'listCollections': {
-        const dbMap = this._dbs.get(dbName) ?? new Map();
-        const collNames: BsonDoc[] = [];
-        for (const name of dbMap.keys()) {
-          collNames.push({ name, type: 'collection', options: {}, idIndex: { v: 2, key: { _id: 1 }, name: '_id_' } });
-        }
-        return {
-          cursor: { id: 0, ns: `${dbName}.$cmd.listCollections`, firstBatch: collNames as unknown as BsonValue },
-          ok: 1,
-        };
-      }
-
-      case 'createCollection': {
-        const collName = cmd[cmdName] as string;
-        this.getCollection(dbName, collName);
-        return { ok: 1 };
-      }
-
-      case 'drop': {
-        const collName = cmd[cmdName] as string;
-        const dbMap = this._dbs.get(dbName);
-        if (dbMap) dbMap.delete(collName);
-        return { ok: 1 };
-      }
-
-      case 'find': {
-        const collName = cmd.find as string;
-        const filter = (cmd.filter ?? {}) as MongoDoc;
-        const limit = (cmd.limit as number) ?? 0;
-        const skip = (cmd.skip as number) ?? 0;
-        const coll = this.getCollection(dbName, collName);
-        let results = coll.filter(doc => matchesFilter(doc, filter));
-        if (skip > 0) results = results.slice(skip);
-        if (limit > 0) results = results.slice(0, limit);
-        return {
-          cursor: { id: 0, ns: `${dbName}.${collName}`, firstBatch: results as unknown as BsonValue },
-          ok: 1,
-        };
-      }
-
-      case 'insert': {
-        const collName = cmd.insert as string;
-        const docs = (cmd.documents ?? []) as MongoDoc[];
-        const coll = this.getCollection(dbName, collName);
-        let n = 0;
-        for (const doc of docs) {
-          const inserted = { _id: doc._id ?? this._idCounter++, ...doc };
-          coll.push(inserted);
-          n++;
-        }
-        return { n, ok: 1 };
-      }
-
-      case 'update': {
-        const collName = cmd.update as string;
-        const updates = (cmd.updates ?? []) as Array<{ q: MongoDoc; u: MongoDoc; upsert?: boolean; multi?: boolean }>;
-        const coll = this.getCollection(dbName, collName);
-        let nModified = 0;
-        let nUpserted = 0;
-        for (const upd of updates) {
-          const filter = upd.q ?? {};
-          const setDoc = ((upd.u as any)?.$set ?? upd.u) as MongoDoc;
-          const unsetDoc = ((upd.u as any)?.$unset) as MongoDoc | undefined;
-          const incDoc = ((upd.u as any)?.$inc) as MongoDoc | undefined;
-          let matched = false;
-          for (const doc of coll) {
-            if (matchesFilter(doc, filter)) {
-              if (setDoc) Object.assign(doc, setDoc);
-              if (unsetDoc) { for (const k of Object.keys(unsetDoc)) delete doc[k]; }
-              if (incDoc) { for (const [k, v] of Object.entries(incDoc)) (doc as any)[k] = ((doc as any)[k] ?? 0) + (v as number); }
-              nModified++;
-              matched = true;
-              if (!upd.multi) break;
-            }
-          }
-          if (!matched && upd.upsert) {
-            const newDoc = { _id: this._idCounter++, ...filter, ...setDoc };
-            coll.push(newDoc);
-            nUpserted++;
-          }
-        }
-        return { n: nModified + nUpserted, nModified, ok: 1 };
-      }
-
-      case 'delete': {
-        const collName = cmd.delete as string;
-        const deletes = (cmd.deletes ?? []) as Array<{ q: MongoDoc; limit?: number }>;
-        const coll = this.getCollection(dbName, collName);
-        let n = 0;
-        for (const del of deletes) {
-          const filter = del.q ?? {};
-          const limit = del.limit ?? 0; // 0 = all
-          let deleted = 0;
-          const remaining: MongoDoc[] = [];
-          for (const doc of coll) {
-            if ((limit === 0 || deleted < limit) && matchesFilter(doc, filter)) {
-              deleted++;
-              n++;
-            } else {
-              remaining.push(doc);
-            }
-          }
-          coll.splice(0, coll.length, ...remaining);
-        }
-        return { n, ok: 1 };
-      }
-
-      case 'getMore':
-        // We return all data in firstBatch, so getMore always returns empty
-        return {
-          cursor: { id: 0, ns: `${dbName}`, nextBatch: [] as unknown as BsonValue },
-          ok: 1,
-        };
-
-      default:
-        throw new SimNodeUnsupportedMongoFeature(cmdName);
-    }
+    for (const doc of docs) coll.push({ _id: this._idCounter++, ...doc });
   }
 
   reset(): void {
@@ -443,7 +290,7 @@ export class MongoStore {
   }
 }
 
-// Simple filter matching (supports: equality, $gt, $lt, $gte, $lte, $ne, $in, $exists)
+// Simple filter matching — kept for any remaining sync usage
 function matchesFilter(doc: MongoDoc, filter: MongoDoc): boolean {
   for (const [key, expected] of Object.entries(filter)) {
     if (key === '$and') {
@@ -471,110 +318,150 @@ function matchesFilter(doc: MongoDoc, filter: MongoDoc): boolean {
   return true;
 }
 
+// Exported so tests that import matchesFilter still compile
+export { matchesFilter };
+
 // ---------------------------------------------------------------------------
-// MongoConnection — stateful per-connection handler
+// MongoProxyConnection — per-client-connection TCP proxy to real mongod
 // ---------------------------------------------------------------------------
 
-class MongoConnection {
-  // Buffer for partial frames
-  private _buf = Buffer.alloc(0);
 
-  constructor(private _store: MongoStore, private _defaultDb: string) {}
+/** A pending upstream request waiting for its response. */
+interface PendingResponse {
+  resolve: (buf: Buffer) => void;
+  reject: (err: Error) => void;
+}
 
-  /**
-   * Process incoming raw TCP data.
-   * Returns one or more response frames.
-   */
-  processData(data: Buffer): Buffer | null {
-    this._buf = Buffer.concat([this._buf, data]);
-    const responses: Buffer[] = [];
+/**
+ * One proxy connection to the real mongod process.
+ * Incoming bytes are forwarded verbatim; responses are reassembled from the
+ * MongoDB wire-protocol framing (first 4 bytes = LE message length) and
+ * delivered back to the caller as Promises so the scheduler can inject
+ * virtual latency before the bytes are handed to the simulated client.
+ */
+class MongoProxyConnection {
+  private _upstream: net.Socket;
+  private _recvBuf  = Buffer.alloc(0);
+  private _pending: PendingResponse[] = [];
+  private _closed   = false;
 
-    while (this._buf.length >= 16) {
-      const msgLen = this._buf.readInt32LE(0);
-      if (this._buf.length < msgLen) break;
-
-      const frame = parseFrame(this._buf);
-      this._buf = this._buf.slice(msgLen);
-
-      if (!frame) continue;
-
-      try {
-        const resp = this._handleFrame(frame);
-        if (resp) responses.push(resp);
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        if (frame.opCode === OP_MSG) {
-          responses.push(buildOpMsg(999, frame.requestId, {
-            ok: 0,
-            errmsg: errMsg,
-            code: 1,
-            codeName: 'SimNodeError',
-          }));
-        }
-      }
-    }
-
-    return responses.length > 0 ? Buffer.concat(responses) : null;
+  constructor(
+    host: string,
+    port: number,
+    /** Real (pre-patch) net.createConnection so we bypass the TcpInterceptor. */
+    realConnect: (port: number, host: string) => net.Socket,
+  ) {
+    this._upstream = realConnect(port, host);
+    this._upstream.on('data',  (chunk: Buffer) => this._onData(chunk));
+    this._upstream.on('error', (err: Error)    => this._onError(err));
+    this._upstream.on('close', ()              => { this._closed = true; this._onError(new Error('mongod connection closed')); });
   }
 
-  private _handleFrame(frame: MsgFrame): Buffer | null {
-    if (frame.opCode === OP_MSG) {
-      const doc = parseOpMsg(frame.body);
-      // $db is the database name (MongoDB 3.6+ always includes it)
-      const dbName = (doc.$db as string) ?? this._defaultDb;
-      const result = this._store.execCommand(dbName, doc);
-      return buildOpMsg(999, frame.requestId, result);
-    }
+  async send(data: Buffer): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+      if (this._closed) { reject(new Error('mongod connection closed')); return; }
+      this._pending.push({ resolve, reject });
+      this._upstream.write(data);
+    });
+  }
 
-    if (frame.opCode === OP_QUERY) {
-      // Legacy handshake (isMaster, hello) from old drivers
-      const { query } = parseOpQuery(frame.body);
-      const cmdKey = Object.keys(query)[0] ?? 'isMaster';
-      const dbName = this._defaultDb;
-      const result = this._store.execCommand(dbName, { [cmdKey]: 1, ...query });
-      return buildOpReply(frame.requestId, result);
-    }
+  destroy(): void {
+    this._closed = true;
+    this._upstream.destroy();
+  }
 
-    // Ignore other opcodes (OP_COMPRESSED etc.)
-    return null;
+  private _onData(chunk: Buffer): void {
+    this._recvBuf = Buffer.concat([this._recvBuf, chunk]);
+    // Drain complete MongoDB frames (framed by first 4 bytes = LE message length)
+    while (this._recvBuf.length >= 4) {
+      const msgLen = this._recvBuf.readInt32LE(0);
+      if (this._recvBuf.length < msgLen) break;
+      const frame = this._recvBuf.slice(0, msgLen);
+      this._recvBuf  = this._recvBuf.slice(msgLen);
+      const waiter  = this._pending.shift();
+      if (waiter) waiter.resolve(frame);
+    }
+  }
+
+  private _onError(err: Error): void {
+    for (const w of this._pending) w.reject(err);
+    this._pending = [];
   }
 }
 
 // ---------------------------------------------------------------------------
-// MongoMock — public API
+// MongoMock — public API (mongodb-memory-server backend)
 // ---------------------------------------------------------------------------
 
 export class MongoMock {
+  /** Legacy store — available for tests that need direct data access. */
   readonly store: MongoStore;
-  private _connections = new Map<number, MongoConnection>();
-  private _defaultDb: string;
 
-  constructor(opts?: { defaultDb?: string }) {
+  private _server:       import('mongodb-memory-server').MongoMemoryServer | null = null;
+  private _startPromise: Promise<void> | null = null;
+  private _mongoHost     = '127.0.0.1';
+  private _mongoPort     = 27017;
+  private _proxies       = new Map<number, MongoProxyConnection>();
+  /** Captured before TcpInterceptor.install() patches net.createConnection. */
+  private _realConnect: (port: number, host: string) => net.Socket;
+
+  constructor() {
     this.store = new MongoStore();
-    this._defaultDb = opts?.defaultDb ?? 'test';
+    // Capture the REAL net.createConnection now, before TcpInterceptor patches it.
+    const orig = net.createConnection.bind(net) as unknown as (port: number, host: string) => net.Socket;
+    this._realConnect = orig;
   }
 
-  seedData(db: string, collection: string, docs: MongoDoc[]): void {
-    this.store.seedData(db, collection, docs);
+  /**
+   * Start the embedded MongoDB process (idempotent — safe to call multiple times).
+   * Called lazily by createHandler() on the first connection, so scenarios that
+   * don't use MongoDB pay zero startup cost.
+   */
+  async start(): Promise<void> {
+    if (this._startPromise) return this._startPromise;
+    this._startPromise = (async () => {
+      const { MongoMemoryServer } = await import('mongodb-memory-server');
+      this._server = await MongoMemoryServer.create();
+      const uri    = this._server.getUri();
+      const url    = new URL(uri);
+      this._mongoHost = url.hostname;
+      this._mongoPort = parseInt(url.port, 10);
+    })();
+    return this._startPromise;
   }
 
-  reset(): void {
-    this.store.reset();
-    this._connections.clear();
+  /** Stop the embedded MongoDB process and tear down all proxy connections. */
+  async stop(): Promise<void> {
+    for (const p of this._proxies.values()) p.destroy();
+    this._proxies.clear();
+    if (this._server) {
+      await this._server.stop();
+      this._server = null;
+      this._startPromise = null;
+    }
   }
 
+  /**
+   * Returns a TcpMockHandler that proxies raw MongoDB wire-protocol bytes to
+   * the real mongod.  The Promise return type lets the caller (TcpInterceptor /
+   * Scheduler) inject virtual latency before delivering the response.
+   */
   createHandler(): TcpMockHandler {
-    const defaultDb = this._defaultDb;
-    const connections = this._connections;
-    const store = this.store;
-
-    return (data: Buffer, ctx: TcpMockContext): TcpHandlerResult => {
-      if (!connections.has(ctx.socketId)) {
-        connections.set(ctx.socketId, new MongoConnection(store, defaultDb));
+    return async (data: Buffer, ctx: TcpMockContext): Promise<TcpHandlerResult> => {
+      // Lazy-start mongod on the first connection to this handler
+      await this.start();
+      if (!this._proxies.has(ctx.socketId)) {
+        this._proxies.set(
+          ctx.socketId,
+          new MongoProxyConnection(this._mongoHost, this._mongoPort, this._realConnect),
+        );
       }
-      const conn = connections.get(ctx.socketId)!;
-      const response = conn.processData(data);
-      return response ?? null;
+      const proxy = this._proxies.get(ctx.socketId)!;
+      try {
+        return await proxy.send(data);
+      } catch {
+        return null;
+      }
     };
   }
 }

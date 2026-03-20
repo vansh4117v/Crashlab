@@ -68,7 +68,7 @@ describe('PgStore SQL execution', () => {
 });
 
 describe('PG wire protocol', () => {
-  it('handler responds to startup', () => {
+  it('handler responds to startup', async () => {
     const pg = new PgMock();
     const handler = pg.createHandler();
 
@@ -82,17 +82,18 @@ describe('PG wire protocol', () => {
     const startup = Buffer.concat(parts);
     startup.writeInt32BE(startup.length, 0);
 
-    const result = handler(startup, { remoteHost: 'localhost', remotePort: 5432, socketId: 0 });
-    const buf = Buffer.isBuffer(result) ? result : Buffer.concat(result as Buffer[]);
+    const result = await handler(startup, { remoteHost: 'localhost', remotePort: 5432, socketId: 0 });
+    const buf = result as Buffer;
     // Should contain 'R' (auth ok) and 'Z' (ready for query)
     expect(buf[0]).toBe(0x52); // 'R'
     expect(buf.includes(Buffer.from('Z'))).toBe(true);
   });
 
-  it('handler responds to query after startup', () => {
+  it('handler responds to query after startup', async () => {
     const pg = new PgMock();
     pg.seedData('users', [{ id: '1', name: 'Alice' }]);
     const handler = pg.createHandler();
+    const ctx2 = { remoteHost: 'localhost', remotePort: 5432, socketId: 2 };
 
     // Startup
     const startup = Buffer.concat([
@@ -101,7 +102,10 @@ describe('PG wire protocol', () => {
     ]);
     startup.writeInt32BE(196608, 4);
     startup.writeInt32BE(startup.length, 0);
-    handler(startup, { remoteHost: 'localhost', remotePort: 5432, socketId: 1 });
+    await handler(startup, ctx2);
+
+    // Wait for PGlite to initialise and seed data to be mirrored
+    await pg.ready();
 
     // Query
     const query = Buffer.from('SELECT * FROM users');
@@ -111,8 +115,8 @@ describe('PG wire protocol', () => {
       query, Buffer.from([0]),
     ]);
     qMsg.writeInt32BE(query.length + 5, 1);
-    const result = handler(qMsg, { remoteHost: 'localhost', remotePort: 5432, socketId: 1 });
-    const buf = Buffer.isBuffer(result) ? result : Buffer.concat(result as Buffer[]);
+    const result = await handler(qMsg, ctx2);
+    const buf = result as Buffer;
 
     // Should contain 'T' (row desc), 'D' (data row), 'C' (command complete), 'Z' (ready)
     const types = [];
@@ -126,5 +130,5 @@ describe('PG wire protocol', () => {
     expect(types).toContain('D');
     expect(types).toContain('C');
     expect(types).toContain('Z');
-  });
+  }, 30_000);
 });

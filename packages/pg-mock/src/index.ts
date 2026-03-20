@@ -8,6 +8,10 @@ export class SimNodeUnsupportedPGFeature extends Error {
   }
 }
 
+// ── PgStore ───────────────────────────────────────────────────────────────────
+// Kept for direct sync access (used by scheduler-level tests and legacy code).
+// Wire-protocol connections now go through PGlite instead.
+
 type Row = Record<string, string | null>;
 
 export class PgStore {
@@ -29,7 +33,6 @@ export class PgStore {
     if (upper === 'COMMIT') return { tag: 'COMMIT' };
     if (upper === 'ROLLBACK') return { tag: 'ROLLBACK' };
 
-    // SELECT <literal>  e.g. SELECT 1, SELECT 'hello'
     const litMatch = trimmed.match(/^SELECT\s+(.+)$/i);
     if (litMatch && !upper.includes(' FROM ')) {
       const expr = litMatch[1].replace(/;$/, '').trim();
@@ -38,14 +41,13 @@ export class PgStore {
       return { tag: 'SELECT 1', columns: cols, rows: [vals] };
     }
 
-    // SELECT cols FROM table [WHERE ...]
     const selMatch = trimmed.match(/^SELECT\s+(.+?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+))?;?$/i);
     if (selMatch) {
       const colExpr = selMatch[1].trim();
       const table = selMatch[2];
       const where = selMatch[3];
       let rows = this.getTable(table);
-      if (where) rows = this._filterWhere(rows, where);
+      if (where) rows = rows.filter(r => this._matchesWhere(r, where));
       const cols = colExpr === '*'
         ? (rows.length > 0 ? Object.keys(rows[0]) : [])
         : colExpr.split(',').map(c => c.trim());
@@ -53,7 +55,6 @@ export class PgStore {
       return { tag: `SELECT ${data.length}`, columns: cols, rows: data };
     }
 
-    // INSERT INTO table (cols) VALUES (vals)
     const insMatch = trimmed.match(/^INSERT\s+INTO\s+(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\);?$/i);
     if (insMatch) {
       const table = insMatch[1];
@@ -67,12 +68,10 @@ export class PgStore {
       return { tag: 'INSERT 0 1' };
     }
 
-    // UPDATE table SET col=val WHERE col=val
     const updMatch = trimmed.match(/^UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+?);?$/i);
     if (updMatch) {
-      const table = updMatch[1];
       const sets = this._parseAssignments(updMatch[2]);
-      const rows = this.getTable(table);
+      const rows = this.getTable(updMatch[1]);
       let count = 0;
       for (const r of rows) {
         if (this._matchesWhere(r, updMatch[3])) {
@@ -83,48 +82,71 @@ export class PgStore {
       return { tag: `UPDATE ${count}` };
     }
 
-    // DELETE FROM table WHERE col=val
     const delMatch = trimmed.match(/^DELETE\s+FROM\s+(\w+)\s+WHERE\s+(.+?);?$/i);
     if (delMatch) {
       const tName = delMatch[1].toLowerCase();
       const rows = this._tables.get(tName) ?? [];
       const remaining = rows.filter(r => !this._matchesWhere(r, delMatch[2]));
-      const count = rows.length - remaining.length;
       this._tables.set(tName, remaining);
-      return { tag: `DELETE ${count}` };
+      return { tag: `DELETE ${rows.length - remaining.length}` };
     }
 
     throw new SimNodeUnsupportedPGFeature(sql);
   }
 
-  private _filterWhere(rows: Row[], where: string): Row[] {
-    return rows.filter(r => this._matchesWhere(r, where));
-  }
-
   private _matchesWhere(row: Row, where: string): boolean {
     const m = where.match(/^(\w+)\s*=\s*(.+)$/);
     if (!m) return false;
-    const val = m[2].trim().replace(/^'|'$/g, '');
-    return row[m[1].trim()] === val;
+    return row[m[1].trim()] === m[2].trim().replace(/^'|'$/g, '');
   }
 
   private _parseAssignments(expr: string): Record<string, string> {
     const result: Record<string, string> = {};
     for (const part of expr.split(',')) {
       const [k, v] = part.split('=').map(s => s.trim());
-      result[k] = v.replace(/^'|'$/g, '');
+      result[k] = (v ?? '').replace(/^'|'$/g, '');
     }
     return result;
   }
 }
 
+// ── PGlite helpers ────────────────────────────────────────────────────────────
+
+// Dynamically imported so the package remains optional at load time.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PGliteInstance = any;
+
+function createPGliteInstance(): Promise<PGliteInstance> {
+  return import('@electric-sql/pglite').then(({ PGlite }) => new PGlite());
+}
+
+/** Infer a PostgreSQL command tag from the SQL statement and affected-row count. */
+function inferTag(sql: string, rowCount: number, affected?: number): string {
+  const verb = sql.trim().split(/\s+/)[0]?.toUpperCase() ?? '';
+  switch (verb) {
+    case 'SELECT': return `SELECT ${rowCount}`;
+    case 'INSERT': return `INSERT 0 ${affected ?? rowCount}`;
+    case 'UPDATE': return `UPDATE ${affected ?? rowCount}`;
+    case 'DELETE': return `DELETE ${affected ?? rowCount}`;
+    case 'CREATE': return 'CREATE TABLE';
+    case 'DROP':   return 'DROP TABLE';
+    case 'BEGIN':  return 'BEGIN';
+    case 'COMMIT': return 'COMMIT';
+    case 'ROLLBACK': return 'ROLLBACK';
+    default:       return verb;
+  }
+}
+
+// ── PgConnection ──────────────────────────────────────────────────────────────
+
 class PgConnection {
   private _phase: 'startup' | 'ready' = 'startup';
   private _txState: 'I' | 'T' | 'E' = 'I';
 
-  constructor(private _store: PgStore) {}
+  constructor(private _pglite: Promise<PGliteInstance>) {}
 
-  processData(data: Buffer): TcpHandlerResult {
+  async processData(data: Buffer): Promise<Buffer> {
+    // ── Startup / SSL handshake ───────────────────────────────────────────────
     if (this._phase === 'startup') {
       const parsed = proto.parseStartupMsg(data);
       if ('isSSL' in parsed) return Buffer.from('N');
@@ -132,26 +154,91 @@ class PgConnection {
       return proto.startupResponse();
     }
 
-    if (data[0] !== 0x51) { // Not 'Q'
-      throw new SimNodeUnsupportedPGFeature(`Message type: ${String.fromCharCode(data[0])}`);
+    // ── Simple Query ('Q') ────────────────────────────────────────────────────
+    if (data[0] === 0x51) {
+      const sql = proto.parseQueryMsg(data);
+      return this._execQuery(sql);
     }
 
-    const sql = proto.parseQueryMsg(data);
+    // ── Extended protocol (Parse/Bind/Execute/Sync) ───────────────────────────
+    // Process a multi-message pipeline; collect all responses and flush at Sync.
+    const responses: Buffer[] = [];
+    let offset = 0;
+
+    while (offset < data.length) {
+      const msgType = String.fromCharCode(data[offset]);
+      const msgLen  = data.readInt32BE(offset + 1);
+      const payload = data.slice(offset + 5, offset + 1 + msgLen);
+      offset += 1 + msgLen;
+
+      switch (msgType) {
+        case 'P': { // Parse
+          responses.push(proto.parseComplete());
+          break;
+        }
+        case 'B': { // Bind
+          responses.push(proto.bindComplete());
+          break;
+        }
+        case 'D': { // Describe
+          responses.push(proto.noData());
+          break;
+        }
+        case 'E': { // Execute
+          const sql = proto.parseExecuteMsg(payload);
+          if (sql) {
+            const r = await this._execQuery(sql);
+            responses.push(r);
+          }
+          break;
+        }
+        case 'S': { // Sync
+          responses.push(proto.readyForQuery(this._txState));
+          break;
+        }
+        default:
+          // Silently ignore unknown message types
+          break;
+      }
+    }
+
+    return responses.length > 0 ? Buffer.concat(responses) : proto.readyForQuery(this._txState);
+  }
+
+  private async _execQuery(sql: string): Promise<Buffer> {
+    const trimmed = sql.trim();
+    const upper   = trimmed.toUpperCase();
+
+    if (upper === 'BEGIN')    { this._txState = 'T'; return Buffer.concat([proto.commandComplete('BEGIN'),    proto.readyForQuery('T')]); }
+    if (upper === 'COMMIT')   { this._txState = 'I'; return Buffer.concat([proto.commandComplete('COMMIT'),   proto.readyForQuery('I')]); }
+    if (upper === 'ROLLBACK') { this._txState = 'I'; return Buffer.concat([proto.commandComplete('ROLLBACK'), proto.readyForQuery('I')]); }
+
+    const db = await this._pglite;
     try {
-      const result = this._store.execSQL(sql);
-      if (result.tag === 'BEGIN') this._txState = 'T';
-      else if (result.tag === 'COMMIT' || result.tag === 'ROLLBACK') this._txState = 'I';
+      const result = await db.query(trimmed);
+      const fields: Array<{ name: string }> = result.fields ?? [];
+      const rows:   Array<Record<string, unknown>> = result.rows  ?? [];
 
       const bufs: Buffer[] = [];
-      if (result.columns && result.rows) {
-        bufs.push(proto.rowDescription(result.columns));
-        for (const row of result.rows) bufs.push(proto.dataRow(row));
+
+      if (fields.length > 0) {
+        bufs.push(proto.rowDescription(fields.map((f: { name: string }) => f.name)));
+        for (const row of rows) {
+          bufs.push(proto.dataRow(fields.map((f: { name: string }) => {
+            const v = row[f.name];
+            return v === null || v === undefined ? null : String(v);
+          })));
+        }
       }
-      bufs.push(proto.commandComplete(result.tag));
+
+      const tag = inferTag(trimmed, rows.length, result.affectedRows as number | undefined);
+      if (tag === 'BEGIN') this._txState = 'T';
+      else if (tag === 'COMMIT' || tag === 'ROLLBACK') this._txState = 'I';
+
+      bufs.push(proto.commandComplete(tag));
       bufs.push(proto.readyForQuery(this._txState));
       return Buffer.concat(bufs);
     } catch (err) {
-      if (err instanceof SimNodeUnsupportedPGFeature) throw err;
       return Buffer.concat([
         proto.errorResponse(err instanceof Error ? err.message : String(err)),
         proto.readyForQuery(this._txState === 'T' ? 'E' : 'I'),
@@ -160,18 +247,72 @@ class PgConnection {
   }
 }
 
+// ── PgMock ────────────────────────────────────────────────────────────────────
+
 export class PgMock {
+  /** Legacy sync store — retained for direct scheduler-level test access. */
   readonly store: PgStore;
+
+  /** Shared PGlite instance (one per PgMock, lazy-initialised). */
+  private _pglite: Promise<PGliteInstance>;
+  /** Tracks all in-flight seed operations so ready() can await them. */
+  private _seedPromise: Promise<void> = Promise.resolve();
   private _connections = new Map<number, PgConnection>();
 
-  constructor() { this.store = new PgStore(); }
+  constructor() {
+    this.store  = new PgStore();
+    this._pglite = createPGliteInstance();
+  }
 
-  seedData(table: string, rows: Row[]): void { this.store.seedData(table, rows); }
+  /**
+   * Resolves once PGlite is initialised AND all pending seedData() calls have
+   * been mirrored into PGlite.  Await this before making wire-protocol queries
+   * in tests that call seedData().
+   */
+  async ready(): Promise<void> {
+    await this._pglite;
+    await this._seedPromise;
+  }
+
+  /**
+   * Seed data into BOTH the legacy PgStore (sync access) AND PGlite (wire protocol).
+   * Creates a simple text-column table with the supplied rows.
+   */
+  seedData(table: string, rows: Array<Record<string, string | null>>): void {
+    this.store.seedData(table, rows);
+    // Chain onto _seedPromise so ready() waits for ALL seed operations in order.
+    this._seedPromise = this._seedPromise.then(() => this._seedPGlite(table, rows));
+  }
+
+  private async _seedPGlite(table: string, rows: Array<Record<string, string | null>>): Promise<void> {
+    if (rows.length === 0) return;
+    const db = await this._pglite;
+    const cols = Object.keys(rows[0]);
+    const colDefs = cols.map(c => `"${c}" TEXT`).join(', ');
+    try {
+      await db.exec(`CREATE TABLE IF NOT EXISTS "${table}" (${colDefs})`);
+      for (const row of rows) {
+        const vals = cols.map(c => row[c] === null ? 'NULL' : `'${String(row[c]).replace(/'/g, "''")}'`).join(', ');
+        await db.exec(`INSERT INTO "${table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${vals})`);
+      }
+    } catch {
+      // Ignore duplicate table errors on repeated seeding
+    }
+  }
+
+  /**
+   * Execute a raw SQL query against the embedded PGlite instance.
+   * Returns rows as plain objects keyed by column name.
+   */
+  async query<T = Record<string, unknown>>(sql: string): Promise<{ rows: T[]; fields: Array<{ name: string }> }> {
+    const db = await this._pglite;
+    return db.query(sql) as Promise<{ rows: T[]; fields: Array<{ name: string }> }>;
+  }
 
   createHandler(): TcpMockHandler {
-    return (data: Buffer, ctx: TcpMockContext): TcpHandlerResult => {
+    return async (data: Buffer, ctx: TcpMockContext): Promise<TcpHandlerResult> => {
       if (!this._connections.has(ctx.socketId)) {
-        this._connections.set(ctx.socketId, new PgConnection(this.store));
+        this._connections.set(ctx.socketId, new PgConnection(this._pglite));
       }
       return this._connections.get(ctx.socketId)!.processData(data);
     };

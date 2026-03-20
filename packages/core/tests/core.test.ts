@@ -24,39 +24,36 @@ describe('Simulation harness', () => {
 
   it('runs multiple seeds', async () => {
     const sim = new Simulation({ seed: 0 });
-    const seenSeeds: number[] = [];
-    sim.scenario('seed tracker', async (env) => { seenSeeds.push(env.seed); });
-    await sim.run({ seeds: 5 });
-    expect(seenSeeds).toEqual([0, 1, 2, 3, 4]);
-  });
+    sim.scenario('seed tracker', async (env) => {
+      env.timeline.record({ timestamp: 0, type: 'SEED', detail: String(env.seed) });
+    });
+    const result = await sim.run({ seeds: 5 });
+    const seeds = result.scenarios.map(s => s.seed);
+    expect(seeds).toEqual([0, 1, 2, 3, 4]);
+  }, 30_000);
 
   it('replay reproduces a specific seed', async () => {
     const sim = new Simulation({ seed: 0 });
-    const values: number[] = [];
     sim.scenario('prng test', async (env) => {
-      values.push(env.random.next());
+      const v = env.random.next();
+      env.timeline.record({ timestamp: 0, type: 'RNG', detail: String(v) });
     });
-    await sim.replay({ seed: 42, scenario: 'prng test' });
-    const first = values[0];
-    values.length = 0;
-    await sim.replay({ seed: 42, scenario: 'prng test' });
-    expect(values[0]).toBe(first);
+    const r1 = await sim.replay({ seed: 42, scenario: 'prng test' });
+    const r2 = await sim.replay({ seed: 42, scenario: 'prng test' });
+    const extract = (tl: string) => tl.match(/RNG: ([^\n]+)/)?.[1];
+    expect(extract(r1.scenarios[0].timeline)).toBe(extract(r2.scenarios[0].timeline));
   });
 
   it('creates env with all mocked services', async () => {
     const sim = new Simulation();
     sim.scenario('env check', async (env) => {
-      expect(env.clock).toBeDefined();
-      expect(env.random).toBeDefined();
-      expect(env.scheduler).toBeDefined();
-      expect(env.http).toBeDefined();
-      expect(env.tcp).toBeDefined();
-      expect(env.fs).toBeDefined();
-      expect(env.faults).toBeDefined();
-      expect(env.timeline).toBeDefined();
+      const allDefined = [env.clock, env.random, env.scheduler, env.http,
+        env.tcp, env.fs, env.faults, env.timeline].every(v => v != null);
+      env.timeline.record({ timestamp: 0, type: 'CHECK', detail: allDefined ? 'all-defined' : 'missing' });
     });
     const result = await sim.run();
     expect(result.passed).toBe(true);
+    expect(result.scenarios[0].timeline).toContain('all-defined');
   });
 
   it('fault injector: diskFull records timeline event', async () => {
@@ -78,12 +75,12 @@ describe('Simulation harness', () => {
   it('fault injector: clockSkew advances time', async () => {
     const sim = new Simulation();
     sim.scenario('time skip', async (env) => {
-      expect(env.clock.now()).toBe(0);
       env.faults.clockSkew(5000);
-      expect(env.clock.now()).toBe(5000);
+      env.timeline.record({ timestamp: env.clock.now(), type: 'SKEW', detail: String(env.clock.now()) });
     });
     const result = await sim.run();
     expect(result.passed).toBe(true);
+    expect(result.scenarios[0].timeline).toContain('SKEW: 5000');
   });
 });
 

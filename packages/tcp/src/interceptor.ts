@@ -184,6 +184,7 @@ export class TcpInterceptor {
       });
     });
 
+    server.on('error', () => { /* swallow EADDRINUSE / EACCES so the process doesn't crash */ });
     server.listen(port, '127.0.0.1');
     this._localServers.set(port, server);
 
@@ -197,8 +198,9 @@ export class TcpInterceptor {
   stopLocalServers(): Promise<void> {
     const closes: Promise<void>[] = [];
     for (const [port, server] of this._localServers) {
-      closes.push(new Promise<void>((res, rej) => server.close(err => err ? rej(err) : res())));
       this._localServers.delete(port);
+      if (!server.listening) continue; // never bound (e.g. EADDRINUSE) — skip
+      closes.push(new Promise<void>((res) => server.close(() => res())));
     }
     return Promise.all(closes).then(() => undefined);
   }
