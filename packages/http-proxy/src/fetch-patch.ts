@@ -101,23 +101,24 @@ export function createFetchPatch(interceptor: HttpInterceptor, originalFetch: ty
          resolve(response);
        };
 
-       const latency = route.config.latency;
-       if (latency && latency > 0 && anyInterceptor._clock) {
+       // Effective latency = route latency + global defaultLatency (from fault injection)
+       const latency = (route.config.latency ?? 0) + (anyInterceptor._defaultLatency ?? 0);
+
+       // Spec v3: Always route through scheduler when available — even zero-latency
+       // responses — so PRNG ordering applies to all same-tick completions.
+       if (anyInterceptor._scheduler && anyInterceptor._clock) {
          const when = anyInterceptor._clock.now() + latency;
-         // Fix #6: use scheduler for deterministic same-tick ordering
-         if (anyInterceptor._scheduler) {
-           const opId = `fetch-${++_fetchReqCounter}`;
-           (anyInterceptor._scheduler as IScheduler).enqueueCompletion({
-             id: opId,
-             when,
-             run: () => { deliver(); return Promise.resolve(); },
-           });
-         } else {
-           anyInterceptor._clock.setTimeout(deliver, latency);
-         }
+         const opId = `fetch-${++_fetchReqCounter}`;
+         (anyInterceptor._scheduler as IScheduler).enqueueCompletion({
+           id: opId,
+           when,
+           run: () => { deliver(); return Promise.resolve(); },
+         });
+       } else if (latency > 0 && anyInterceptor._clock) {
+         anyInterceptor._clock.setTimeout(deliver, latency);
        } else {
          deliver();
        }
-    });
+     });
   };
 }

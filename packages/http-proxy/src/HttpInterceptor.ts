@@ -159,6 +159,7 @@ export class HttpInterceptor {
   private readonly _scheduler?: IScheduler;
 
   private _partitioned = false;
+  private _defaultLatency = 0;
 
   private _origHttpRequest?: typeof http.request;
   private _origHttpGet?: typeof http.get;
@@ -203,6 +204,14 @@ export class HttpInterceptor {
     }
   }
 
+  /**
+   * Add a global extra latency (ms) to all HTTP responses.
+   * Used by FaultInjector.slowDatabase() for HTTP-based DBs.
+   */
+  setDefaultLatency(ms: number): void {
+    this._defaultLatency = ms;
+  }
+
   // patching
 
   install(): void {
@@ -238,12 +247,14 @@ export class HttpInterceptor {
     if (this._origHttpsRequest) httpsCjs.request = this._origHttpsRequest;
     if (this._origHttpsGet) httpsCjs.get = this._origHttpsGet;
     this._partitioned = false;
+    this._defaultLatency = 0;
   }
 
   reset(): void {
     this._routes.length = 0;
     this._allCalls.length = 0;
     this._partitioned = false;
+    this._defaultLatency = 0;
   }
 
   // internal
@@ -297,20 +308,21 @@ export class HttpInterceptor {
         fakeRes._flush();
       };
 
-      const latency = route.config.latency;
-      if (latency && latency > 0 && this._clock) {
+      // Effective latency = route latency + global default (from fault injection)
+      const latency = (route.config.latency ?? 0) + this._defaultLatency;
+
+      // Spec v3: Always route through scheduler when available — even zero-latency
+      // responses — so PRNG ordering applies to all same-tick HTTP completions.
+      if (this._scheduler && this._clock) {
         const when = this._clock.now() + latency;
-        // Fix #6: route through scheduler for deterministic same-tick ordering
-        if (this._scheduler) {
-          const opId = `http-${++_httpReqCounter}`;
-          this._scheduler.enqueueCompletion({
-            id: opId,
-            when,
-            run: () => { deliver(); return Promise.resolve(); },
-          });
-        } else {
-          this._clock.setTimeout(deliver, latency);
-        }
+        const opId = `http-${++_httpReqCounter}`;
+        this._scheduler.enqueueCompletion({
+          id: opId,
+          when,
+          run: () => { deliver(); return Promise.resolve(); },
+        });
+      } else if (latency > 0 && this._clock) {
+        this._clock.setTimeout(deliver, latency);
       } else {
         deliver();
       }

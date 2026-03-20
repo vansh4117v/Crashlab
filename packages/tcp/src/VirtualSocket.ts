@@ -9,6 +9,9 @@ let nextSocketId = 0;
  * - `write()` feeds data to the registered mock handler.
  * - Handler responses are emitted as `'data'` events, optionally delayed
  *   via the virtual clock / scheduler.
+ * - All completions go through `scheduler.enqueueCompletion` when a scheduler
+ *   is attached — even zero-latency ones — ensuring PRNG ordering applies to
+ *   all same-tick I/O completions.
  * - No real network I/O ever occurs.
  */
 export class VirtualSocket extends Duplex {
@@ -49,7 +52,7 @@ export class VirtualSocket extends Duplex {
 
   /** Simulate connection establishment (called by the interceptor). */
   _simulateConnect(): void {
-    // Fix #8: guard against destroyed socket to prevent connect race
+    // Guard against destroyed socket to prevent connect race
     if (this.destroyed) return;
     this.connecting = false;
     this._connected = true;
@@ -80,27 +83,27 @@ export class VirtualSocket extends Duplex {
       }
     };
 
-    // Schedule the handler through clock/scheduler if available
-    if (this._latency > 0 && this._clock) {
+    // Always route through scheduler when available — ensures PRNG ordering
+    // applies to ALL same-tick completions, including zero-latency ones.
+    if (this._scheduler && this._clock) {
       const when = this._clock.now() + this._latency;
-      if (this._scheduler) {
-        this._scheduler.enqueueCompletion({
-          id: `tcp-${this.id}-${this._clock.now()}`,
-          when,
-          run: deliver,
-        });
-      } else {
-        this._clock.setTimeout(() => { void deliver(); }, this._latency);
-      }
+      this._scheduler.enqueueCompletion({
+        id: `tcp-${this.id}-${this._clock.now()}`,
+        when,
+        run: deliver,
+      });
+    } else if (this._latency > 0 && this._clock) {
+      // Clock-only path (no scheduler)
+      this._clock.setTimeout(() => { void deliver(); }, this._latency);
     } else if (this._latency > 0 && this._scheduler) {
-      // Scheduler without clock: enqueue at current time + latency placeholder
+      // Scheduler without clock
       this._scheduler.enqueueCompletion({
         id: `tcp-${this.id}-fallback`,
         when: this._latency,
         run: deliver,
       });
     } else {
-      // No latency: deliver via microtask (avoids synchronous re-entrancy)
+      // No latency, no scheduler: deliver via microtask (avoids synchronous re-entrancy)
       queueMicrotask(() => { void deliver(); });
     }
 

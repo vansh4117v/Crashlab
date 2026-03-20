@@ -17,15 +17,14 @@ export function clearMockedHosts() {
 }
 
 /**
- * Normalizes host lookup. If the host is in `mockedHosts`, returns 127.0.0.1.
- * If not, and `throwOnUnmocked` is true, throws ENOTFOUND.
- * Otherwise, falls back to the original function.
+ * Returns true if the hostname is known-mocked or is localhost/loopback.
+ * Returns false if we should pass through to the real DNS.
+ * Throws ENOTFOUND if `throwOnUnmocked` is set.
  */
-function attemptShortCircuit<T>(hostname: string, originalFn: Function, args: any[]): T | { fallback: true } {
-  if (mockedHosts.has(hostname) || hostname === 'localhost') {
-    return { fallback: false, result: '127.0.0.1' } as any; 
-  }
-  
+function shouldShortCircuit(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+  if (mockedHosts.has(hostname)) return true;
+
   if (dnsConfig.throwOnUnmocked) {
     const err = new Error(`getaddrinfo ENOTFOUND ${hostname}`);
     (err as any).code = 'ENOTFOUND';
@@ -33,8 +32,8 @@ function attemptShortCircuit<T>(hostname: string, originalFn: Function, args: an
     (err as any).hostname = hostname;
     throw err;
   }
-  
-  return { fallback: true };
+
+  return false;
 }
 
 // Intercept `dns.lookup` and others
@@ -47,33 +46,30 @@ export function patchDns(originals: Record<string, any>) {
       opts = {};
     }
 
+    let intercept: boolean;
     try {
-      const intercepted = attemptShortCircuit(hostname, originals.lookup, []);
-      if (intercepted && typeof intercepted === 'object' && 'fallback' in intercepted && intercepted.fallback) {
-        return originals.lookup.apply(dns, [hostname, options, callback]);
-      }
-      
-      const ip = (intercepted as any).result || '127.0.0.1';
-      
-      if (cb) {
-        process.nextTick(() => {
-           if (opts && opts.all) {
-             cb(null, [{ address: ip, family: 4 }]);
-           } else {
-             cb(null, ip, 4);
-           }
-        });
-        return {};
-      } else {
-        return Promise.resolve(opts && opts.all ? [{ address: ip, family: 4 }] : { address: ip, family: 4 });
-      }
+      intercept = shouldShortCircuit(hostname);
     } catch (e: any) {
-      if (cb) {
-        process.nextTick(() => cb(e));
-        return {};
-      }
+      if (cb) { process.nextTick(() => cb(e)); return {}; }
       return Promise.reject(e);
     }
+
+    if (!intercept) {
+      return originals.lookup.apply(dns, [hostname, options, callback]);
+    }
+
+    const ip = '127.0.0.1';
+    if (cb) {
+      process.nextTick(() => {
+         if (opts && opts.all) {
+           cb(null, [{ address: ip, family: 4 }]);
+         } else {
+           cb(null, ip, 4);
+         }
+      });
+      return {};
+    }
+    return Promise.resolve(opts && opts.all ? [{ address: ip, family: 4 }] : { address: ip, family: 4 });
   };
 
   const customResolve = function resolve(hostname: string, rrtype: any, callback?: any) {
@@ -83,34 +79,55 @@ export function patchDns(originals: Record<string, any>) {
         cb = rrtype;
         type = 'A';
      }
-     
-     if (type !== 'A' && type !== 'AAAA' && type !== 'ANY') {
-         return originals.resolve.apply(dns, [hostname, rrtype, callback]);
+
+     let intercept: boolean;
+     try {
+       intercept = shouldShortCircuit(hostname);
+     } catch (e: any) {
+       if (cb) { process.nextTick(() => cb(e)); return; }
+       return Promise.reject(e);
      }
 
-     try {
-        const intercepted = attemptShortCircuit(hostname, originals.resolve, []);
-        if (intercepted && typeof intercepted === 'object' && 'fallback' in intercepted && intercepted.fallback) {
-          return originals.resolve.apply(dns, [hostname, rrtype, callback]);
-        }
-        const ips = [ (intercepted as any).result || '127.0.0.1' ];
-        if (cb) {
-           process.nextTick(() => cb(null, ips));
-           return;
-        }
-        return Promise.resolve(ips);
-     } catch(e) {
-        if (cb) {
-           process.nextTick(() => cb(e));
-           return;
-        }
-        return Promise.reject(e);
+     if (!intercept) {
+       return originals.resolve.apply(dns, [hostname, rrtype, callback]);
      }
+
+     const ips = ['127.0.0.1'];
+     if (cb) {
+        process.nextTick(() => cb(null, ips));
+        return;
+     }
+     return Promise.resolve(ips);
   };
-  
+
   const customResolve4 = function resolve4(hostname: string, options: any, callback?: any) {
       return customResolve(hostname, 'A', typeof options === 'function' ? options : callback);
   };
 
-  return { customLookup, customResolve, customResolve4 };
+  // resolve6 — for unmocked hosts, throw ENOTFOUND so nothing reaches real network
+  const customResolve6 = function resolve6(hostname: string, options: any, callback?: any) {
+    const cb = typeof options === 'function' ? options : callback;
+    let intercept: boolean;
+    try {
+      intercept = shouldShortCircuit(hostname);
+    } catch (e: any) {
+      if (cb) { process.nextTick(() => cb(e)); return; }
+      return Promise.reject(e);
+    }
+
+    if (intercept) {
+      const ips = ['::1'];
+      if (cb) { process.nextTick(() => cb(null, ips)); return; }
+      return Promise.resolve(ips);
+    }
+
+    // Not mocked — pass through but this may reach real network.
+    // If originals.resolve6 exists use it; otherwise reject.
+    if (originals.resolve6) return originals.resolve6.apply(dns, [hostname, options, callback]);
+    const err = Object.assign(new Error(`SimNode: dns.resolve6 for unmocked host ${hostname}`), { code: 'ENOTFOUND' });
+    if (cb) { process.nextTick(() => cb(err)); return; }
+    return Promise.reject(err);
+  };
+
+  return { customLookup, customResolve, customResolve4, customResolve6 };
 }

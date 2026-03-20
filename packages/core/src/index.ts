@@ -5,6 +5,9 @@ import { Scheduler } from '@simnode/scheduler';
 import { HttpInterceptor } from '@simnode/http-proxy';
 import { TcpInterceptor } from '@simnode/tcp';
 import { VirtualFS } from '@simnode/filesystem';
+import { PgMock } from '@simnode/pg-mock';
+import { RedisMock } from '@simnode/redis-mock';
+import { MongoMock } from '@simnode/mongo';
 import { createRequire } from 'node:module';
 
 const _require = createRequire(import.meta.url);
@@ -33,6 +36,12 @@ export interface SimEnv {
   http: HttpInterceptor;
   tcp: TcpInterceptor;
   fs: VirtualFS;
+  /** Built-in PostgreSQL wire-protocol mock (connected to localhost:5432 via TCP mock). */
+  pg: PgMock;
+  /** Built-in Redis RESP mock (connected to localhost:6379 via TCP mock). */
+  redis: RedisMock;
+  /** Built-in MongoDB OP_MSG mock (connected to localhost:27017 via TCP mock). */
+  mongo: MongoMock;
   faults: FaultInjector;
   timeline: Timeline;
 }
@@ -55,11 +64,13 @@ export class FaultInjector {
   }
 
   /**
-   * Add latency to all TCP responses (simulates slow DB).
-   * Affects pg-mock and redis-mock handlers which go through TcpInterceptor.
+   * Add latency to all TCP responses AND all HTTP responses (simulates slow DB).
+   * Affects pg-mock, redis-mock, and mongo-mock handlers via TcpInterceptor.
+   * Also affects HTTP-based DBs (CockroachDB, Supabase, PlanetScale via HTTP).
    */
   slowDatabase(opts: { latency: number }): void {
     this._env.tcp.setDefaultLatency(opts.latency);
+    this._env.http.setDefaultLatency(opts.latency);
     this._env.timeline.record({
       timestamp: this._env.clock.now(),
       type: 'FAULT',
@@ -179,17 +190,17 @@ export class Simulation {
   private async _runScenario(scenario: ScenarioDef, seed: number) {
     const env = this._createEnv(seed);
 
-    // Fix #2: wire clock → scheduler so advance() drives all I/O
+    // Wire clock → scheduler so advance() drives all I/O
     env.clock.onTick = async (t: number) => {
       await env.scheduler.runTick(t);
     };
 
-    // Fix #1: auto-install all interceptors
+    // Auto-install all interceptors
     env.http.install();
     env.tcp.install();
     env.fs.install();
 
-    // Fix #3: install determinism patches (timer + Date + crypto + performance.now)
+    // Install determinism patches (timer + Date + crypto + performance.now)
     const patches = this._installDeterminismPatches(env);
 
     let passed = true;
@@ -215,6 +226,8 @@ export class Simulation {
       env.http.uninstall();
       env.tcp.uninstall();
       env.fs.uninstall();
+      // Stop local TCP servers (mongo, pg, redis loopback servers)
+      await env.tcp.stopLocalServers();
     }
 
     return { name: scenario.name, seed, passed, error, timeline: env.timeline.toString() };
@@ -224,21 +237,54 @@ export class Simulation {
     const clock = new VirtualClock(0);
     const random = new SeededRandom(seed);
     const scheduler = new Scheduler({ prngSeed: seed });
-    // Fix #6: pass both clock and scheduler to HttpInterceptor
+
     const http = new HttpInterceptor({ clock, scheduler });
     const tcp = new TcpInterceptor({ clock, scheduler });
-    // Fix #9: pass clock to VirtualFS for realistic stat timestamps
+    // Pass clock to VirtualFS for realistic stat timestamps
     const fs = new VirtualFS({ clock });
+
     const timeline = new Timeline();
-    const env: SimEnv = { seed, clock, random, scheduler, http, tcp, fs, faults: null as any, timeline };
+
+    // Built-in protocol mocks
+    const pg = new PgMock();
+    const redis = new RedisMock();
+    const mongo = new MongoMock();
+
+    const env: SimEnv = {
+      seed, clock, random, scheduler,
+      http, tcp, fs,
+      pg, redis, mongo,
+      faults: null as any,
+      timeline,
+    };
     env.faults = new FaultInjector(env);
+
+    // Register built-in protocol mocks as TCP routes
+    // These are the default "well-known port" routes; scenarios can override by
+    // calling env.tcp.mock('host:port', { handler }) with a custom handler.
+    tcp.mock('localhost:5432', { handler: pg.createHandler() });
+    tcp.mock('localhost:6379', { handler: redis.createHandler() });
+    tcp.mock('localhost:27017', { handler: mongo.createHandler() });
+
+    // Start local TCP servers for protocols that may be accessed by external
+    // processes (e.g. Prisma's query engine binary connects via real TCP).
+    // These servers listen on 127.0.0.1 only and are torn down in finally.
+    // We fire-and-forget here; proper cleanup happens via stopLocalServers() in finally.
+    // NOTE: addLocalServer is called BEFORE install() so it uses the real net.Server.
+    // The client-side interceptor (patching net.createConnection) also handles the same
+    // routes, so in-process code goes through VirtualSocket while out-of-process
+    // binaries use the loopback server.
+    tcp.addLocalServer(5432, pg.createHandler());
+    tcp.addLocalServer(6379, redis.createHandler());
+    tcp.addLocalServer(27017, mongo.createHandler());
+
     return env;
   }
 
   /**
    * Install determinism patches:
    *  - crypto.randomBytes / randomUUID / getRandomValues → seeded PRNG
-   *  - setTimeout / setInterval / clearTimeout / clearInterval / setImmediate / Date / process.nextTick / performance.now → virtual clock
+   *  - setTimeout / setInterval / clearTimeout / clearInterval / setImmediate / Date / performance.now → virtual clock
    *
    * Returns a `restore()` that undoes everything.
    */
@@ -294,10 +340,9 @@ export class Simulation {
       }
     }
 
-    // Fix #3: install clock patches (setTimeout, setInterval, Date, performance.now, etc.)
+    // Install clock patches (setTimeout, setInterval, Date, performance.now, etc.)
     // patchNextTick is set to false to avoid deadlocking scenario code that uses
     // dynamic import() or other Node.js internals which rely on the real process.nextTick.
-    // The virtual nextTick queue is only drained during advance() via _flushMicrotasks.
     const clockResult = installClock(env.clock, { patchNextTick: false });
 
     return {

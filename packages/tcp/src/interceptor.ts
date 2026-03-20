@@ -3,7 +3,7 @@ import * as dns from 'node:dns';
 import { createRequire } from 'node:module';
 import { VirtualSocket } from './VirtualSocket.js';
 import { patchDns, registerMockedHost, clearMockedHosts, dnsConfig } from './dns.js';
-import type { IClock, IScheduler, TcpMockConfig } from './types.js';
+import type { IClock, IScheduler, TcpMockConfig, TcpMockHandler } from './types.js';
 import { SimNodeUnmockedTCPConnectionError } from './types.js';
 
 // CJS reference for mutable patching (same technique as @simnode/http-proxy)
@@ -16,6 +16,12 @@ export interface TcpInterceptorOptions {
   scheduler?: IScheduler;
 }
 
+/** Handle returned by addLocalServer. Lets callers stop a specific local server. */
+export interface LocalServerHandle {
+  port: number;
+  close(): Promise<void>;
+}
+
 /**
  * Intercepts all outbound TCP connections and routes them to registered
  * mock handlers.  Real network is never touched.
@@ -24,6 +30,11 @@ export interface TcpInterceptorOptions {
  * - `net.createConnection`
  * - `net.connect`
  * - `new net.Socket()` + `.connect()`
+ *
+ * Additionally supports a "local TCP server" layer: `addLocalServer(port, handler)`
+ * starts a real `net.Server` bound to `127.0.0.1:<port>` so that out-of-process
+ * binaries (e.g. Prisma's query engine) can connect to a loopback address and have
+ * their data routed through the same mock handler + scheduler pipeline.
  */
 export class TcpInterceptor {
   private readonly _mocks = new Map<string, TcpMockConfig>();
@@ -40,6 +51,9 @@ export class TcpInterceptor {
   private _origDnsLookup?: any;
   private _origDnsResolve?: any;
   private _origDnsResolve4?: any;
+
+  /** Local TCP servers started via addLocalServer(). */
+  private readonly _localServers: Map<number, net.Server> = new Map();
 
   constructor(opts?: TcpInterceptorOptions) {
     this._clock = opts?.clock;
@@ -103,6 +117,92 @@ export class TcpInterceptor {
     this._extraLatency = ms;
   }
 
+  // --------------------------------------------------------------------------
+  // Local TCP server layer
+  // --------------------------------------------------------------------------
+
+  /**
+   * Start a real `net.Server` on `127.0.0.1:<port>` that routes incoming
+   * connections through `handler` using the same latency + scheduler pipeline
+   * as the client-side interceptor.
+   *
+   * This is required for out-of-process binaries (e.g. Prisma's Rust query
+   * engine) that cannot be intercepted via module patching.
+   *
+   * The returned `LocalServerHandle` lets the caller stop this specific server.
+   * `uninstall()` automatically stops all local servers.
+   */
+  addLocalServer(port: number, handler: TcpMockHandler, latency = 0): LocalServerHandle {
+    if (this._localServers.has(port)) {
+      // Already listening — return a handle to the existing server
+      const existing = this._localServers.get(port)!;
+      return {
+        port,
+        close: () => new Promise<void>((res, rej) => existing.close(err => err ? rej(err) : res())),
+      };
+    }
+
+    const clock = this._clock;
+    const scheduler = this._scheduler;
+    const sockets = this._sockets;
+    const extraLatencyRef = () => this._extraLatency;
+
+    const server = net.createServer((socket) => {
+      socket.on('data', (data: Buffer) => {
+        const effectiveLatency = latency + extraLatencyRef();
+        const deliver = async () => {
+          try {
+            const result = await handler(data, {
+              remoteHost: socket.remoteAddress ?? '127.0.0.1',
+              remotePort: socket.remotePort ?? port,
+              socketId: -1, // real socket — no VirtualSocket id
+            });
+            if (result == null) return;
+            const bufs = Array.isArray(result) ? result : [result];
+            for (const buf of bufs) {
+              if (!socket.destroyed) socket.write(buf);
+            }
+          } catch (err) {
+            if (!socket.destroyed) {
+              socket.destroy(err instanceof Error ? err : new Error(String(err)));
+            }
+          }
+        };
+
+        if (effectiveLatency > 0 && clock) {
+          const when = clock.now() + effectiveLatency;
+          if (scheduler) {
+            scheduler.enqueueCompletion({ id: `local-${port}-${clock.now()}`, when, run: deliver });
+          } else {
+            clock.setTimeout(() => { void deliver(); }, effectiveLatency);
+          }
+        } else if (effectiveLatency > 0 && scheduler) {
+          scheduler.enqueueCompletion({ id: `local-${port}-fallback`, when: effectiveLatency, run: deliver });
+        } else {
+          queueMicrotask(() => { void deliver(); });
+        }
+      });
+    });
+
+    server.listen(port, '127.0.0.1');
+    this._localServers.set(port, server);
+
+    return {
+      port,
+      close: () => new Promise<void>((res, rej) => server.close(err => err ? rej(err) : res())),
+    };
+  }
+
+  /** Stop all local TCP servers (called automatically by uninstall()). */
+  stopLocalServers(): Promise<void> {
+    const closes: Promise<void>[] = [];
+    for (const [port, server] of this._localServers) {
+      closes.push(new Promise<void>((res, rej) => server.close(err => err ? rej(err) : res())));
+      this._localServers.delete(port);
+    }
+    return Promise.all(closes).then(() => undefined);
+  }
+
   // patching
 
   install(): void {
@@ -120,7 +220,7 @@ export class TcpInterceptor {
         if (hostname) registerMockedHost(hostname);
     }
 
-    const { customLookup, customResolve, customResolve4 } = patchDns({
+    const { customLookup, customResolve, customResolve4, customResolve6 } = patchDns({
         lookup: this._origDnsLookup,
         resolve: this._origDnsResolve,
         resolve4: this._origDnsResolve4,
@@ -129,10 +229,12 @@ export class TcpInterceptor {
     (dnsCjs as any).lookup = customLookup;
     (dnsCjs as any).resolve = customResolve;
     (dnsCjs as any).resolve4 = customResolve4;
+    (dnsCjs as any).resolve6 = customResolve6;
     if (dnsCjs.promises) {
         (dnsCjs.promises as any).lookup = customLookup;
         (dnsCjs.promises as any).resolve = customResolve;
         (dnsCjs.promises as any).resolve4 = customResolve4;
+        (dnsCjs.promises as any).resolve6 = customResolve6;
     }
 
     const self = this;
@@ -187,6 +289,10 @@ export class TcpInterceptor {
 
     this._partitioned = false;
     this._extraLatency = 0;
+
+    // Stop all local servers (non-blocking; caller should await stopLocalServers() separately
+    // if they need to wait for full teardown)
+    void this.stopLocalServers();
   }
 
   // internal
