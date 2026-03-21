@@ -45,6 +45,15 @@ export interface SimEnv {
   mongo: MongoMock;
   faults: FaultInjector;
   timeline: Timeline;
+  /**
+   * Advance the virtual clock by `ms` milliseconds, yielding to the real
+   * event loop between small incremental steps.  This allows real-TCP I/O
+   * (e.g. supertest HTTP requests) to be processed while the scheduler
+   * drains pending completions at each step.
+   *
+   * Injected by the simulation worker after determinism patches are installed.
+   */
+  pump: (ms: number, steps?: number) => Promise<void>;
 }
 
 // ── FaultInjector ─────────────────────────────────────────────────────────────
@@ -189,6 +198,9 @@ export async function createEnv(seed: number, mongoOpts?: MongoOpts): Promise<Si
     pg, redis, mongo,
     faults: null as unknown as FaultInjector,
     timeline,
+    // Placeholder — replaced by simulation-worker with a version that uses
+    // the real (unpatched) setTimeout to yield to the host event loop.
+    pump: async (ms: number, _steps?: number) => { await clock.advance(ms); },
   };
   env.faults = new FaultInjector(env);
 

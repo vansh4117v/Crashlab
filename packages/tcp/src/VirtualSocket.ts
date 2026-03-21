@@ -26,7 +26,7 @@ export class VirtualSocket extends Duplex {
   readableEnded = false;
 
   private readonly _handler: TcpMockHandler;
-  private readonly _latency: number;
+  private readonly _getLatency: () => number;
   private readonly _clock?: IClock;
   private readonly _scheduler?: IScheduler;
   private _connected = false;
@@ -37,13 +37,15 @@ export class VirtualSocket extends Duplex {
     config: TcpMockConfig;
     clock?: IClock;
     scheduler?: IScheduler;
+    /** Optional dynamic latency getter. When provided, overrides config.latency on every write. */
+    getLatency?: () => number;
   }) {
     super({ allowHalfOpen: true });
     this.id = nextSocketId++;
     this.remoteAddress = opts.host;
     this.remotePort = opts.port;
     this._handler = opts.config.handler;
-    this._latency = opts.config.latency ?? 0;
+    this._getLatency = opts.getLatency ?? (() => opts.config.latency ?? 0);
     this._clock = opts.clock;
     this._scheduler = opts.scheduler;
   }
@@ -83,27 +85,34 @@ export class VirtualSocket extends Duplex {
       }
     };
 
-    // Always route through scheduler when available — ensures PRNG ordering
-    // applies to ALL same-tick completions, including zero-latency ones.
-    if (this._scheduler && this._clock) {
-      const when = this._clock.now() + this._latency;
+    // Read latency dynamically so that re-mocking a target with new latency
+    // affects existing sockets (no disconnect/reconnect needed).
+    const latency = this._getLatency();
+
+    // Only route through the scheduler when there is explicit latency.
+    // Zero-latency completions are delivered via microtask so that setup-phase
+    // connections (DB/Redis handshake) can complete without a clock.advance().
+    // Holding zero-latency completions in the scheduler would deadlock: the
+    // handshake awaits a response, but the scheduler only drains on advance().
+    if (latency > 0 && this._scheduler && this._clock) {
+      const when = this._clock.now() + latency;
       this._scheduler.enqueueCompletion({
         id: `tcp-${this.id}-${this._clock.now()}`,
         when,
         run: deliver,
       });
-    } else if (this._latency > 0 && this._clock) {
+    } else if (latency > 0 && this._clock) {
       // Clock-only path (no scheduler)
-      this._clock.setTimeout(() => { void deliver(); }, this._latency);
-    } else if (this._latency > 0 && this._scheduler) {
+      this._clock.setTimeout(() => { void deliver(); }, latency);
+    } else if (latency > 0 && this._scheduler) {
       // Scheduler without clock
       this._scheduler.enqueueCompletion({
         id: `tcp-${this.id}-fallback`,
-        when: this._latency,
+        when: latency,
         run: deliver,
       });
     } else {
-      // No latency, no scheduler: deliver via microtask (avoids synchronous re-entrancy)
+      // Zero latency (or no clock/scheduler): deliver via microtask.
       queueMicrotask(() => { void deliver(); });
     }
 

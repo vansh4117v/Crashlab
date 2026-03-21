@@ -340,18 +340,22 @@ export class TcpInterceptor {
       throw new SimNodeUnmockedTCPConnectionError(host, port);
     }
 
-    // Merge extra latency from fault injection
-    const effectiveConfig: TcpMockConfig =
-      this._extraLatency > 0
-        ? { ...config, latency: (config.latency ?? 0) + this._extraLatency }
-        : config;
+    // Dynamic latency getter: reads from the live _mocks map on every write
+    // so that re-mocking a target with new latency affects existing sockets.
+    const mocks = this._mocks;
+    const extraLatencyRef = this;
+    const getLatency = (): number => {
+      const current = mocks.get(key);
+      return (current?.latency ?? 0) + extraLatencyRef._extraLatency;
+    };
 
     const socket = new VirtualSocket({
       host,
       port,
-      config: effectiveConfig,
+      config,
       clock: this._clock,
       scheduler: this._scheduler,
+      getLatency,
     });
 
     this._sockets.push(socket);

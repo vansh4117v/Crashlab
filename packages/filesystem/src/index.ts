@@ -157,7 +157,7 @@ export class VirtualFS {
     };
 
     // Read-only sync ops: normalize + fallback to real fs
-    const readSyncNames = ['statSync', 'lstatSync', 'accessSync', 'readdirSync'] as const;
+    const readSyncNames = ['statSync', 'lstatSync', 'accessSync', 'readdirSync', 'realpathSync'] as const;
     for (const name of readSyncNames) {
       const memFn = (fsCjs as any)[name];
       if (typeof memFn === 'function') {
@@ -187,7 +187,7 @@ export class VirtualFS {
     if (typeof origRenameSync === 'function') (fsCjs as any).renameSync = wrap2(origRenameSync);
 
     // Async callback variants: read ops with fallback
-    const readAsyncNames = ['stat', 'lstat', 'access', 'readdir'] as const;
+    const readAsyncNames = ['stat', 'lstat', 'access', 'readdir', 'realpath'] as const;
     for (const name of readAsyncNames) {
       const memFn = (fsCjs as any)[name];
       const realFn = originals[name] as Function | undefined;
@@ -298,6 +298,21 @@ export class VirtualFS {
       const memPReadFile = (fsCjs.promises as any).readFile;
       const memPWriteFile = (fsCjs.promises as any).writeFile;
       const memPAppendFile = (fsCjs.promises as any).appendFile;
+
+      // realpath promise: fallback to real fs on ENOENT
+      const memPRealpath = (fsCjs.promises as any).realpath;
+      const realPRealpath = self._promiseOriginals['realpath'] as Function | undefined;
+      if (typeof memPRealpath === 'function') {
+        (fsCjs.promises as any).realpath = async (p: any, opts?: any) => {
+          const norm = (typeof p === 'string') ? normalizePath(p) : p;
+          try {
+            return await memPRealpath(norm, opts);
+          } catch (e: any) {
+            if (e?.code === 'ENOENT' && realPRealpath) return realPRealpath(p, opts);
+            throw e;
+          }
+        };
+      }
 
       const realPReadFile = self._promiseOriginals['readFile'] as Function | undefined;
       (fsCjs.promises as any).readFile = async (p: any, opts?: any) => {
