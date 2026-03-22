@@ -6,8 +6,8 @@ import { Scheduler } from '@simnode/scheduler';
 import { TcpInterceptor, SimNodeUnmockedTCPConnectionError } from '@simnode/tcp';
 import { PgMock } from '@simnode/pg-mock';
 import { RedisMock } from '@simnode/redis-mock';
-import { Simulation } from '@simnode/core';
-import type { SimEnv } from '@simnode/core';
+import { Simulation } from 'simnode';
+import type { SimEnv } from 'simnode';
 
 const _require = createRequire(import.meta.url);
 const net: typeof netTypes = _require('node:net');

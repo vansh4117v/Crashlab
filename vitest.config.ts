@@ -19,7 +19,7 @@ export default defineConfig({
       '@simnode/pg-mock': pkg('pg-mock'),
       '@simnode/redis-mock': pkg('redis-mock'),
       '@simnode/filesystem': pkg('filesystem'),
-      '@simnode/core': pkg('core'),
+      'simnode': pkg('core'),
     },
   },
 });
