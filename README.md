@@ -332,6 +332,21 @@ npm test           # vitest — 176 tests
 
 All packages live under `packages/`. The monorepo uses npm workspaces + tsup for building. PRs must pass `npm test` with zero failures.
 
+### Releasing
+
+This repo uses [Changesets](https://github.com/changesets/changesets) for versioning and publishing. All packages are versioned together (fixed group).
+
+```sh
+# 1. Describe your change (prompts for bump type + summary)
+npx changeset
+
+# 2. Apply version bumps — updates all package.json versions and cross-package pins
+npm run version
+
+# 3. Build and publish to npm
+npm run release
+```
+
 ---
 
 ## License

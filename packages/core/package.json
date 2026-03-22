@@ -1,6 +1,7 @@
 {
   "name": "simnode",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -23,14 +24,15 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@simnode/clock": "*",
-    "@simnode/filesystem": "*",
-    "@simnode/http-proxy": "*",
-    "@simnode/mongo": "*",
-    "@simnode/pg-mock": "*",
-    "@simnode/random": "*",
-    "@simnode/redis-mock": "*",
-    "@simnode/scheduler": "*",
-    "@simnode/tcp": "*"
+    "@simnode/clock": "0.1.0",
+    "@simnode/filesystem": "0.1.0",
+    "@simnode/http-proxy": "0.1.0",
+    "@simnode/mongo": "0.1.0",
+    "@simnode/pg-mock": "0.1.0",
+    "@simnode/random": "0.1.0",
+    "@simnode/redis-mock": "0.1.0",
+    "@simnode/scheduler": "0.1.0",
+    "@simnode/tcp": "0.1.0",
+    "mongodb-memory-server": "^10.0.0"
   }
 }

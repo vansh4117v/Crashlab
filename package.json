@@ -2,6 +2,7 @@
   "name": "simnode",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -10,9 +11,12 @@
     "build": "tsc --build --clean && npm run build --workspaces && tsc --build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.30.0",
     "@types/node": "^22.0.0",
     "tsup": "^8.4.0",
     "typescript": "^5.7.0",
