@@ -30,7 +30,7 @@ A **double-payment race condition** is buried here. Two concurrent requests both
 **`scenarios/charge.scenario.ts`** — the file your team ships alongside the code:
 
 ```typescript
-import type { SimEnv } from '@simnode/core';
+import type { SimEnv } from 'simnode';
 
 export default async function chargeScenario(env: SimEnv) {
   // Mock Stripe: 200ms virtual latency, deterministic response
@@ -76,7 +76,7 @@ export default async function chargeScenario(env: SimEnv) {
 **`simnode.config.js`** — wire it to the harness:
 
 ```javascript
-import { Simulation } from '@simnode/core';
+import { Simulation } from 'simnode';
 import { resolve } from 'node:path';
 
 const sim = new Simulation({ timeout: 15_000 });
@@ -188,7 +188,10 @@ No failure found after 1247 seeds in 5m 0s (timeout after 5m 0s).
 Your scenario may be correct, or the bug requires a specific condition not yet explored.
 ```
 
-Press **Ctrl+C** to stop early — hunt prints the same no-failure summary and exits cleanly with code `0`.
+Press **Ctrl+C** to stop early — SimNode finishes the current seed, discards its result (it may have been interrupted mid-flight), and exits cleanly with code `0`:
+```
+No failure found after 1247 seeds in 2m 14s (interrupted by Ctrl+C).
+```
 
 ---
 
@@ -232,13 +235,13 @@ npx simnode run --config=./tests/sim/simnode.config.js --seeds=500
 ## Installation
 
 ```sh
-npm install --save-dev @simnode/core
+npm install --save-dev simnode
 ```
 
-The full stack (all mocks) is available à la carte:
+`simnode` includes all mocks in a single package. Individual sub-packages are also published if you need only a specific layer:
 
 ```sh
-npm install --save-dev @simnode/core @simnode/pg-mock @simnode/redis-mock @simnode/mongo @simnode/http-proxy @simnode/tcp @simnode/clock @simnode/scheduler @simnode/filesystem
+npm install --save-dev @simnode/pg-mock @simnode/redis-mock @simnode/mongo @simnode/http-proxy @simnode/tcp @simnode/clock @simnode/scheduler @simnode/filesystem
 ```
 
 ---
@@ -276,7 +279,7 @@ SimNode is precise about what it controls. Senior engineers deserve a straight a
 ## Scenario API Reference
 
 ```typescript
-import type { SimEnv } from '@simnode/core';
+import type { SimEnv } from 'simnode';
 
 export default async function myScenario(env: SimEnv) {
   env.clock         // VirtualClock — advance(), now(), setTimeout(), setInterval()
@@ -324,7 +327,7 @@ Each worker is fully isolated. Patches applied inside one worker never leak to t
 git clone https://github.com/your-org/simnode
 npm install
 npm run build
-npm test           # vitest — 166 tests, ~8s
+npm test           # vitest — 176 tests
 ```
 
 All packages live under `packages/`. The monorepo uses npm workspaces + tsup for building. PRs must pass `npm test` with zero failures.

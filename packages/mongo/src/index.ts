@@ -130,12 +130,11 @@ export class MongoMock {
    * Called in the worker's finally block for clean isolation.
    */
   async drop(): Promise<void> {
-    if (!this._clientPromise) return;
     try {
-      const client = await this._clientPromise;
+      const client = await this._getClient();
       await client.db(this._dbName).dropDatabase();
       await client.close();
-    } catch { /* ignore if db was never used */ }
+    } catch { /* ignore if db was never used or already gone */ }
     this._clientPromise = null;
     for (const p of this._proxies.values()) p.destroy();
     this._proxies.clear();
