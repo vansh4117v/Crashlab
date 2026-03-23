@@ -40,6 +40,7 @@ export interface PgMockLike {
 }
 
 export interface RedisMockLike {
+  seedData(key: string, value: string): void;
   flush(): Promise<void>;
   createHandler(): import('@simnode/tcp').TcpMockHandler;
 }

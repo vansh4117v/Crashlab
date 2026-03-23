@@ -115,14 +115,14 @@ describe('MongoMock drop()', () => {
 
   it('is a no-op when called before any driver interaction', async () => {
     const mock = new MongoMock({ mongoHost, mongoPort, mongoDbName: 'sim_drop_noop' });
-    await expect(mock.drop()).resolves.not.toThrow();
+    await expect(mock.drop()).resolves.toBeUndefined();
   }, 30_000);
 
   it('can be called multiple times without error', async () => {
     await seedCollection('sim_drop_twice', 'items', [{ x: 1 }]);
     const mock = new MongoMock({ mongoHost, mongoPort, mongoDbName: 'sim_drop_twice' });
     await mock.drop();
-    await expect(mock.drop()).resolves.not.toThrow();
+    await expect(mock.drop()).resolves.toBeUndefined();
   }, 30_000);
 });
 
