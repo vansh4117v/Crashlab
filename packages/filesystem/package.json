@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsup && tsc --build tsconfig.json --force",
     "clean": "rimraf dist",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "build:pkg": "tsup && tsc --build tsconfig.json --force"
   },
   "dependencies": {
     "memfs": "^4.56.11"

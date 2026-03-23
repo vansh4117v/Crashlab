@@ -26,7 +26,8 @@
   "scripts": {
     "build": "tsup && tsc --build tsconfig.json --force",
     "clean": "rimraf dist",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "build:pkg": "tsup && tsc --build tsconfig.json --force"
   },
   "dependencies": {
     "@simnode/clock": "0.1.0",
@@ -43,9 +44,17 @@
     "mongodb-memory-server": ">=10.0.0"
   },
   "peerDependenciesMeta": {
-    "@simnode/mongo": { "optional": true },
-    "@simnode/pg-mock": { "optional": true },
-    "@simnode/redis-mock": { "optional": true },
-    "mongodb-memory-server": { "optional": true }
+    "@simnode/mongo": {
+      "optional": true
+    },
+    "@simnode/pg-mock": {
+      "optional": true
+    },
+    "@simnode/redis-mock": {
+      "optional": true
+    },
+    "mongodb-memory-server": {
+      "optional": true
+    }
   }
 }
