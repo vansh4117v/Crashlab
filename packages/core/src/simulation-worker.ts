@@ -84,7 +84,19 @@ async function main(): Promise<void> {
   let scenarioFn: (env: SimEnv) => Promise<void>;
   if (scenarioPath) {
     _applyScenarioEnv(scenarioPath);
-    const mod = await import(scenarioPath) as { default?: (env: SimEnv) => Promise<void> };
+    let mod: { default?: (env: SimEnv) => Promise<void> };
+    try {
+      mod = await import(scenarioPath) as { default?: (env: SimEnv) => Promise<void> };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (scenarioPath.endsWith('.ts') && /unknown file extension|\.ts/i.test(msg)) {
+        throw new Error(
+          `[SimNode] Cannot import TypeScript scenario directly: ${scenarioPath}\n` +
+          `Run Node with a TypeScript loader, e.g.: node --import tsx/esm  or  node --loader ts-node/esm`,
+        );
+      }
+      throw err;
+    }
     // Re-apply after import() in case the app called dotenv.config() at module
     // initialisation and overwrote the values we set above.
     _applyScenarioEnv(scenarioPath);

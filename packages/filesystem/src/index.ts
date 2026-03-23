@@ -282,7 +282,11 @@ export class VirtualFS {
         try { self._checkInjection(String(p), 'write'); }
         catch (e) { const cb = args[args.length - 1]; if (typeof cb === 'function') return cb(e); throw e; }
       }
-      return memWriteFile(p, data, ...args);
+      const norm = (typeof p === 'string') ? normalizePath(p) : p;
+      if (typeof norm === 'string') {
+        try { self._vol.mkdirSync(path.dirname(norm), { recursive: true }); } catch { /* already exists */ }
+      }
+      return memWriteFile(norm, data, ...args);
     };
 
     (fsCjs as any).appendFile = function (p: any, data: any, ...args: any[]) {
@@ -290,7 +294,11 @@ export class VirtualFS {
         try { self._checkInjection(String(p), 'write'); }
         catch (e) { const cb = args[args.length - 1]; if (typeof cb === 'function') return cb(e); throw e; }
       }
-      return memAppendFile(p, data, ...args);
+      const norm = (typeof p === 'string') ? normalizePath(p) : p;
+      if (typeof norm === 'string') {
+        try { self._vol.mkdirSync(path.dirname(norm), { recursive: true }); } catch { /* already exists */ }
+      }
+      return memAppendFile(norm, data, ...args);
     };
 
     // Wrap promises for injection checks
@@ -333,7 +341,11 @@ export class VirtualFS {
           try { self._checkInjection(String(p), 'write'); }
           catch (e) { return Promise.reject(e); }
         }
-        return memPWriteFile(p, data, opts);
+        const norm = (typeof p === 'string') ? normalizePath(p) : p;
+        if (typeof norm === 'string') {
+          try { self._vol.mkdirSync(path.dirname(norm), { recursive: true }); } catch { /* already exists */ }
+        }
+        return memPWriteFile(norm, data, opts);
       };
 
       (fsCjs.promises as any).appendFile = (p: any, data: any, opts?: any) => {
@@ -341,7 +353,11 @@ export class VirtualFS {
           try { self._checkInjection(String(p), 'write'); }
           catch (e) { return Promise.reject(e); }
         }
-        return memPAppendFile(p, data, opts);
+        const norm = (typeof p === 'string') ? normalizePath(p) : p;
+        if (typeof norm === 'string') {
+          try { self._vol.mkdirSync(path.dirname(norm), { recursive: true }); } catch { /* already exists */ }
+        }
+        return memPAppendFile(norm, data, opts);
       };
     }
   }

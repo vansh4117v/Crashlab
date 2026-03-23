@@ -130,15 +130,16 @@ export class Simulation {
     try {
       outer: for (let s = 0; s < seedCount; s++) {
         const seed = this._baseSeed + s;
+        let seedPassed = true;
         for (const scenario of this._scenarios) {
           const r = await this._runScenario(scenario, seed, mongo);
-          if (r.passed) {
-            passes++;
-          } else {
+          if (!r.passed) {
+            seedPassed = false;
             failures.push(r);
             if (stopOnFirst) break outer;
           }
         }
+        if (seedPassed) passes++;
       }
     } finally {
       await _stopMongo(mongo);
@@ -284,7 +285,7 @@ async function _startMongo(): Promise<MongoServerInfo> {
       `[SimNode] MongoDB memory server failed to start: ${msg}\n` +
       `  Scenarios that use MongoDB will fail. Install mongodb-memory-server or check its binary.`,
     );
-    return { host: '127.0.0.1', port: 27017, started: false, stop: async () => {} };
+    return { host: '127.0.0.1', port: 0, started: false, stop: async () => {} };
   }
 }
 
