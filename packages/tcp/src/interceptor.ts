@@ -467,7 +467,12 @@ function normalizeTarget(target: string): string {
   if (target.includes('://')) {
     try {
       const u = new URL(target);
-      const port = u.port || (u.protocol === 'postgres:' || u.protocol === 'postgresql:' ? '5432' : '6379');
+      const defaultPort =
+        u.protocol === 'postgres:' || u.protocol === 'postgresql:' ? '5432' :
+        u.protocol === 'redis:' || u.protocol === 'rediss:' ? '6379' :
+        u.protocol === 'mongodb:' || u.protocol === 'mongodb+srv:' ? '27017' :
+        undefined;
+      const port = u.port || defaultPort || '6379';
       return `${normalizeHost(u.hostname)}:${port}`;
     } catch {
       // fall through to raw split

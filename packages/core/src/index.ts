@@ -178,15 +178,22 @@ export class Simulation {
     try {
       for (let seed = this._baseSeed; Date.now() < deadline; seed++) {
         if (opts?.signal?.aborted) break;
+        let failed: ScenarioResult | null = null;
         for (const scenario of this._scenarios) {
           if (opts?.signal?.aborted) break;
           const r = await this._runScenario(scenario, seed, mongo);
-          seedsRun++;
-          opts?.onProgress?.(seed, r.passed);
           if (!r.passed) {
-            return { failure: r, seedsRun, elapsedMs: Date.now() - start };
+            failed = r;
+            break;
           }
         }
+        if (opts?.signal?.aborted) break;
+        seedsRun++;
+        if (failed) {
+          opts?.onProgress?.(seed, false);
+          return { failure: failed, seedsRun, elapsedMs: Date.now() - start };
+        }
+        opts?.onProgress?.(seed, true);
       }
     } finally {
       await _stopMongo(mongo);

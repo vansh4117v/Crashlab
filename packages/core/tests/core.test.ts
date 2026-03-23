@@ -80,6 +80,23 @@ describe('Simulation harness', () => {
     expect(replayed.result.timeline).toContain('all-defined');
   });
 
+  it('hunt counts completed seeds (not per-scenario runs)', async () => {
+    const sim = new Simulation({ seed: 100 });
+    const progress: Array<{ seed: number; passed: boolean }> = [];
+
+    sim.scenario('pass-first', async () => {});
+    sim.scenario('fail-second', async () => { throw new Error('hunt-fail'); });
+
+    const result = await sim.hunt({
+      timeout: 10_000,
+      onProgress: (seed, passed) => progress.push({ seed, passed }),
+    });
+
+    expect(result.failure).not.toBeNull();
+    expect(result.seedsRun).toBe(1);
+    expect(progress).toEqual([{ seed: 100, passed: false }]);
+  }, 30_000);
+
   it('fault injector: diskFull records timeline event', async () => {
     const sim = new Simulation();
     sim.scenario('disk full', async (env) => {

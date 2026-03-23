@@ -72,6 +72,19 @@ describe('TCP interception', () => {
     expect(res.toString()).toBe('+PONG\r\n');
     sock.destroy();
   });
+
+  it('uses MongoDB default port for mongodb:// URLs without explicit port', async () => {
+    interceptor = new TcpInterceptor();
+    interceptor.mock('mongodb://localhost', {
+      handler: () => Buffer.from('mongo-ok'),
+    });
+    interceptor.install();
+
+    const sock = await connect(27017);
+    const res = await writeAndRead(sock, 'ping');
+    expect(res.toString()).toBe('mongo-ok');
+    sock.destroy();
+  });
 });
 
 // 2. VirtualSocket stream behavior

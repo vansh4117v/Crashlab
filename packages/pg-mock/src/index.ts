@@ -279,14 +279,10 @@ export class PgMock {
     const db = await this._pglite;
     const cols = Object.keys(rows[0]);
     const colDefs = cols.map(c => `"${c}" TEXT`).join(', ');
-    try {
-      await db.exec(`CREATE TABLE IF NOT EXISTS "${table}" (${colDefs})`);
-      for (const row of rows) {
-        const vals = cols.map(c => row[c] === null ? 'NULL' : `'${String(row[c]).replace(/'/g, "''")}'`).join(', ');
-        await db.exec(`INSERT INTO "${table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${vals})`);
-      }
-    } catch {
-      // Ignore duplicate table errors on repeated seeding
+    await db.exec(`CREATE TABLE IF NOT EXISTS "${table}" (${colDefs})`);
+    for (const row of rows) {
+      const vals = cols.map(c => row[c] === null ? 'NULL' : `'${String(row[c]).replace(/'/g, "''")}'`).join(', ');
+      await db.exec(`INSERT INTO "${table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${vals})`);
     }
   }
 

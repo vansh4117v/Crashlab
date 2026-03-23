@@ -73,6 +73,12 @@ describe('PgMock SQL execution via PGlite', () => {
     await pg.ready();
     await expect(pg.query('SELECT * FROM nonexistent_table_xyz')).rejects.toThrow();
   }, 30_000);
+
+  it('propagates seed errors instead of swallowing them', async () => {
+    const pg = new PgMock();
+    pg.seedData('bad"table', [{ id: '1' }]);
+    await expect(pg.ready()).rejects.toThrow();
+  }, 30_000);
 });
 
 describe('PG wire protocol', () => {
