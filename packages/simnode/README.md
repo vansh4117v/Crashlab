@@ -94,7 +94,7 @@ export default sim;
 `Date.now()`, `performance.now()`, `setTimeout`, and `setInterval` are replaced with a fully controllable `VirtualClock`. Time only moves when you call `env.clock.advance(ms)`. A scenario that would take 200ms in production takes **0 wall-clock milliseconds** in simulation.
 
 ### 2. Seeded PRNG
-`Math.random()` and `crypto.randomBytes()` are replaced with a deterministic Xoshiro128+ generator seeded per-run. Given the same seed, every random value produced during the scenario is identical — every time, on every machine.
+`Math.random()` and `crypto.randomBytes()` are replaced with a deterministic Mulberry32-based generator seeded per-run. Given the same seed, every random value produced during the scenario is identical — every time, on every machine.
 
 ### 3. I/O Scheduler
 Concurrent `await` calls that resolve at the same virtual timestamp are queued and **shuffled by the seed** before being delivered. Seed 0 might resolve DB-then-Stripe. Seed 847 resolves Stripe-then-DB. Running 1,000 seeds explores 1,000 distinct interleavings of every concurrent I/O operation in your code.
