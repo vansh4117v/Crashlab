@@ -179,21 +179,15 @@ export class TcpInterceptor {
           }
         };
 
-        if (scheduler && clock) {
-          const now = clock.now();
+        if (scheduler) {
+          const now = clock?.now() ?? 0;
           const when = now + Math.max(0, effectiveLatency);
           scheduler.enqueueCompletion({ id: `local-${port}-${now}`, when, run: deliver });
           if (effectiveLatency <= 0) {
             scheduler.requestRunTick?.(now);
           }
-        } else if (effectiveLatency > 0 && clock) {
+        } else if (clock && effectiveLatency > 0) {
           clock.setTimeout(() => { void deliver(); }, effectiveLatency);
-        } else if (scheduler) {
-          const when = Math.max(0, effectiveLatency);
-          scheduler.enqueueCompletion({ id: `local-${port}-fallback`, when, run: deliver });
-          if (effectiveLatency <= 0) {
-            scheduler.requestRunTick?.(0);
-          }
         } else {
           queueMicrotask(() => { void deliver(); });
         }

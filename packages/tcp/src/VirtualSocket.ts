@@ -89,10 +89,12 @@ export class VirtualSocket extends Duplex {
     // affects existing sockets (no disconnect/reconnect needed).
     const latency = this._getLatency();
 
-    // Route through scheduler whenever available (including zero latency) so
-    // same-tick ordering is always PRNG-controlled.
-    if (this._scheduler && this._clock) {
-      const now = this._clock.now();
+    // Scheduler takes priority — routes ALL completions (zero or nonzero
+    // latency) through PRNG ordering so same-tick I/O is always deterministic.
+    // Falls back to clock-setTimeout for nonzero latency without a scheduler,
+    // and to queueMicrotask only when neither scheduler nor clock is present.
+    if (this._scheduler) {
+      const now = this._clock?.now() ?? 0;
       const when = now + Math.max(0, latency);
       this._scheduler.enqueueCompletion({
         id: `tcp-${this.id}-${now}`,
@@ -102,21 +104,11 @@ export class VirtualSocket extends Duplex {
       if (latency <= 0) {
         this._scheduler.requestRunTick?.(now);
       }
-    } else if (latency > 0 && this._clock) {
-      // Clock-only path (no scheduler)
+    } else if (this._clock && latency > 0) {
+      // Clock-only path (no scheduler), nonzero latency.
       this._clock.setTimeout(() => { void deliver(); }, latency);
-    } else if (this._scheduler) {
-      // Scheduler without clock
-      this._scheduler.enqueueCompletion({
-        id: `tcp-${this.id}-fallback`,
-        when: Math.max(0, latency),
-        run: deliver,
-      });
-      if (latency <= 0) {
-        this._scheduler.requestRunTick?.(0);
-      }
     } else {
-      // Zero latency (or no clock/scheduler): deliver via microtask.
+      // No scheduler, no applicable clock: microtask fallback.
       queueMicrotask(() => { void deliver(); });
     }
 

@@ -345,8 +345,8 @@ export class HttpInterceptor {
 
       // Spec v3: Always route through scheduler when available — even zero-latency
       // responses — so PRNG ordering applies to all same-tick HTTP completions.
-      if (this._scheduler && this._clock) {
-        const now = this._clock.now();
+      if (this._scheduler) {
+        const now = this._clock?.now() ?? 0;
         const when = now + latency;
         const opId = `http-${++_httpReqCounter}`;
         this._scheduler.enqueueCompletion({
@@ -357,10 +357,10 @@ export class HttpInterceptor {
         if (latency <= 0) {
           this._scheduler.requestRunTick?.(now);
         }
-      } else if (latency > 0 && this._clock) {
+      } else if (this._clock && latency > 0) {
         this._clock.setTimeout(deliver, latency);
       } else {
-        deliver();
+        queueMicrotask(deliver);
       }
     });
 
