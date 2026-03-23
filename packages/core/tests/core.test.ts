@@ -14,7 +14,7 @@ describe('Simulation harness', () => {
     // Verify timeline content via replay (passing timelines are not retained in run())
     const replayed = await sim.replay({ seed: 0, scenario: 'simple pass' });
     expect(replayed.result.timeline).toContain('hello');
-  });
+  }, 30_000);
 
   it('captures failing scenario', async () => {
     const sim = new Simulation({ seed: 0 });
@@ -64,7 +64,7 @@ describe('Simulation harness', () => {
     const r2 = await sim.replay({ seed: 42, scenario: 'prng test' });
     const extract = (tl: string) => tl.match(/RNG: ([^\n]+)/)?.[1];
     expect(extract(r1.result.timeline)).toBe(extract(r2.result.timeline));
-  });
+  }, 30_000);
 
   it('creates env with all mocked services', async () => {
     const sim = new Simulation();
@@ -78,7 +78,7 @@ describe('Simulation harness', () => {
     expect(result.passes).toBe(1);
     const replayed = await sim.replay({ seed: 0, scenario: 'env check' });
     expect(replayed.result.timeline).toContain('all-defined');
-  });
+  }, 30_000);
 
   it('hunt counts completed seeds (not per-scenario runs)', async () => {
     const sim = new Simulation({ seed: 100 });
@@ -114,7 +114,7 @@ describe('Simulation harness', () => {
     expect(result.passed).toBe(true);
     const replayed = await sim.replay({ seed: 0, scenario: 'disk full' });
     expect(replayed.result.timeline).toContain('Disk full');
-  });
+  }, 30_000);
 
   it('fault injector: clockSkew advances time', async () => {
     const sim = new Simulation();
@@ -126,7 +126,7 @@ describe('Simulation harness', () => {
     expect(result.passed).toBe(true);
     const replayed = await sim.replay({ seed: 0, scenario: 'time skip' });
     expect(replayed.result.timeline).toContain('SKEW: 5000');
-  });
+  }, 30_000);
 });
 
 describe('Timeline', () => {

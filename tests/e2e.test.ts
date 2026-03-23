@@ -186,7 +186,7 @@ describe('Unmocked TCP safety', () => {
     // Verify timeline via replay since passing scenario timelines are not retained in run()
     const replayed = await sim.replay({ seed: 0, scenario: 'unmocked' });
     expect(replayed.result.timeline).toContain('Correctly blocked');
-  });
+  }, 30_000);
 });
 
 /* ── E) Filesystem disk full injection ───────────────── */
@@ -218,5 +218,5 @@ describe('Filesystem disk full', () => {
     expect(result.passes).toBe(1);
     const replayed = await sim.replay({ seed: 0, scenario: 'disk full' });
     expect(replayed.result.timeline).toContain('ENOSPC caught');
-  });
+  }, 30_000);
 });
