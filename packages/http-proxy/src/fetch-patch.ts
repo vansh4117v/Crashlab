@@ -121,7 +121,10 @@ export function createFetchPatch(interceptor: HttpInterceptor, originalFetch: ty
        } else if (anyInterceptor._clock && latency > 0) {
          anyInterceptor._clock.setTimeout(deliver, latency);
        } else {
-         queueMicrotask(deliver);
+         throw new Error(
+           '[SimNode] fetch: a Scheduler is required for deterministic delivery. ' +
+           'Pass { scheduler } when constructing HttpInterceptor.',
+         );
        }
      });
   };

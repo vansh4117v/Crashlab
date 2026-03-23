@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import type * as httpTypes from 'node:http';
 import { HttpInterceptor } from '../src/index.js';
 import { VirtualClock } from '@simnode/clock';
+import { Scheduler } from '@simnode/scheduler';
 
 // Use CJS require so we read the SAME mutable module the interceptor patches.
 const _require = createRequire(import.meta.url);
@@ -18,7 +19,7 @@ afterEach(() => {
 
 describe('HttpInterceptor — static mocks', () => {
   it('intercepts http.request and returns a static response', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('http://api.example.com/users', {
       status: 200,
       body: { users: ['alice'] },
@@ -32,7 +33,7 @@ describe('HttpInterceptor — static mocks', () => {
   });
 
   it('records all calls', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('http://api.example.com/', { status: 200, body: 'ok', match: 'prefix' });
     interceptor.install();
 
@@ -47,7 +48,7 @@ describe('HttpInterceptor — static mocks', () => {
   });
 
   it('emits error for unmatched routes', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.install();
 
     const err = await requestError('http://nomatch.com/x');
@@ -60,7 +61,7 @@ describe('HttpInterceptor — static mocks', () => {
 
 describe('HttpInterceptor — failure injection', () => {
   it('fails after N successful calls', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     // Register a single fail route: succeed 2 times, then ECONNRESET
     interceptor.fail('http://api.example.com/', { after: 2, error: 'ECONNRESET' });
     interceptor.install();

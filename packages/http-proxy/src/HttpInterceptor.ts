@@ -360,7 +360,10 @@ export class HttpInterceptor {
       } else if (this._clock && latency > 0) {
         this._clock.setTimeout(deliver, latency);
       } else {
-        queueMicrotask(deliver);
+        throw new Error(
+          '[SimNode] HttpInterceptor: a Scheduler is required for deterministic delivery. ' +
+          'Pass { scheduler } when constructing HttpInterceptor.',
+        );
       }
     });
 

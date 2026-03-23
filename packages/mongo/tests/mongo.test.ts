@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
 import { MongoMock } from '../src/index.js';
 import { TcpInterceptor } from '@simnode/tcp';
+import { Scheduler } from '@simnode/scheduler';
 
 const _require = createRequire(import.meta.url);
 
@@ -131,7 +132,7 @@ describe('MongoMock createHandler()', () => {
   it('proxies MongoDB driver reads and writes through the TCP handler', async () => {
     const dbName = 'sim_proxy';
     const mock = new MongoMock({ mongoHost, mongoPort, mongoDbName: dbName });
-    const tcp = new TcpInterceptor();
+    const tcp = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
 
     tcp.mock(`${mongoHost}:${mongoPort}`, { handler: mock.createHandler() });
     tcp.install();
@@ -159,7 +160,7 @@ describe('MongoMock createHandler()', () => {
   it('supports multiple concurrent connections (distinct socketIds)', async () => {
     const dbName = 'sim_proxy_multi';
     const mock = new MongoMock({ mongoHost, mongoPort, mongoDbName: dbName });
-    const tcp = new TcpInterceptor();
+    const tcp = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
 
     tcp.mock(`${mongoHost}:${mongoPort}`, { handler: mock.createHandler() });
     tcp.install();

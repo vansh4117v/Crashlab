@@ -1,15 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { install } from '../src/index.js';
+import { install, HttpInterceptor } from '../src/index.js';
 import { VirtualClock } from '@simnode/clock';
+import { Scheduler } from '@simnode/scheduler';
 
 describe('FETCH / undici patch', () => {
   let clock: VirtualClock;
+  let scheduler: Scheduler;
   let uninstall: () => void;
   let interceptor: any;
 
   beforeEach(() => {
     clock = new VirtualClock();
-    const result = install(clock);
+    scheduler = new Scheduler({ prngSeed: 1 });
+    const result = install(new HttpInterceptor({ clock, scheduler }));
     interceptor = result.interceptor;
     uninstall = result.uninstall;
   });
@@ -36,13 +39,14 @@ describe('FETCH / undici patch', () => {
     expect(resolved).toBe(false);
     
     clock.advance(49);
-    // Give promises time to process in the microtask queue (node environment)
+    await scheduler.runTick(clock.now());
     await new Promise((r) => setTimeout(r, 0));
     expect(resolved).toBe(false);
 
     clock.advance(1);
+    await scheduler.runTick(clock.now());
     await new Promise((r) => setTimeout(r, 0));
-    
+
     expect(resolved).toBe(true);
     expect(data.message).toBe('hello from fetch');
     

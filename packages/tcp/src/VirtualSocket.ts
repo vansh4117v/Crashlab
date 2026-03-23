@@ -89,10 +89,11 @@ export class VirtualSocket extends Duplex {
     // affects existing sockets (no disconnect/reconnect needed).
     const latency = this._getLatency();
 
-    // Scheduler takes priority — routes ALL completions (zero or nonzero
-    // latency) through PRNG ordering so same-tick I/O is always deterministic.
-    // Falls back to clock-setTimeout for nonzero latency without a scheduler,
-    // and to queueMicrotask only when neither scheduler nor clock is present.
+    // When a scheduler is present it receives ALL completions — both zero
+    // and nonzero latency — so PRNG-controlled ordering covers every I/O op.
+    // Without a scheduler, nonzero latency uses clock.setTimeout.  Having
+    // neither scheduler nor clock is a misconfiguration: throw rather than
+    // silently falling back to non-deterministic microtask delivery.
     if (this._scheduler) {
       const now = this._clock?.now() ?? 0;
       const when = now + Math.max(0, latency);
@@ -108,8 +109,10 @@ export class VirtualSocket extends Duplex {
       // Clock-only path (no scheduler), nonzero latency.
       this._clock.setTimeout(() => { void deliver(); }, latency);
     } else {
-      // No scheduler, no applicable clock: microtask fallback.
-      queueMicrotask(() => { void deliver(); });
+      throw new Error(
+        '[SimNode] VirtualSocket: a Scheduler is required for deterministic I/O delivery. ' +
+        'Pass { scheduler } when constructing TcpInterceptor.',
+      );
     }
 
     callback();

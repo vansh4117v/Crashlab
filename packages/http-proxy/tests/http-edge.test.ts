@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import type * as httpTypes from 'node:http';
 import { HttpInterceptor } from '../src/index.js';
 import { VirtualClock } from '@simnode/clock';
+import { Scheduler } from '@simnode/scheduler';
 
 const _require = createRequire(import.meta.url);
 const http: typeof httpTypes = _require('node:http');
@@ -91,7 +92,7 @@ describe('concurrent requests', () => {
 
 describe('dynamic handler', () => {
   it('receives request body and URL', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('http://echo.test.com/', {
       match: 'prefix',
       handler: (call) => ({
@@ -113,7 +114,7 @@ describe('dynamic handler', () => {
 
 describe('call filtering', () => {
   it('filters by method', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('http://api.test.com/', { status: 200, body: 'ok', match: 'prefix' });
     interceptor.install();
 
@@ -127,7 +128,7 @@ describe('call filtering', () => {
   });
 
   it('filters by URL prefix', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('http://a.test.com/', { status: 200, body: 'a', match: 'prefix' });
     interceptor.mock('http://b.test.com/', { status: 200, body: 'b', match: 'prefix' });
     interceptor.install();
@@ -145,7 +146,7 @@ describe('call filtering', () => {
 
 describe('no real network', () => {
   it('unmatched URL emits error, never touches real network', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.install();
     // If real network were touched, this would attempt DNS resolution
     // and hang or take >1s. The error should be instant.
@@ -158,7 +159,7 @@ describe('no real network', () => {
 
 describe('reset', () => {
   it('clears all mocks and recorded calls', async () => {
-    interceptor = new HttpInterceptor();
+    interceptor = new HttpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('http://api.test.com/', { status: 200, body: 'ok', match: 'prefix' });
     interceptor.install();
 

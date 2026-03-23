@@ -34,7 +34,7 @@ function writeAndRead(sock: netTypes.Socket, data: string | Buffer): Promise<Buf
 
 describe('TCP interception', () => {
   it('net.createConnection returns a VirtualSocket', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:5432', {
       handler: () => Buffer.from('hello'),
     });
@@ -47,7 +47,7 @@ describe('TCP interception', () => {
   });
 
   it('accepts URL-style targets (postgres://)', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('postgres://localhost:5432', {
       handler: () => Buffer.from('pg-ok'),
     });
@@ -61,7 +61,7 @@ describe('TCP interception', () => {
   });
 
   it('accepts URL-style targets (redis://)', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('redis://localhost:6379', {
       handler: () => Buffer.from('+PONG\r\n'),
     });
@@ -74,7 +74,7 @@ describe('TCP interception', () => {
   });
 
   it('uses MongoDB default port for mongodb:// URLs without explicit port', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('mongodb://localhost', {
       handler: () => Buffer.from('mongo-ok'),
     });
@@ -91,7 +91,7 @@ describe('TCP interception', () => {
 
 describe('VirtualSocket stream', () => {
   it('emits connect event on connection', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:9000', { handler: () => null });
     interceptor.install();
 
@@ -103,7 +103,7 @@ describe('VirtualSocket stream', () => {
   });
 
   it('echoes data through the handler', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:9000', {
       handler: (data) => Buffer.from(`echo:${data.toString()}`),
     });
@@ -117,7 +117,7 @@ describe('VirtualSocket stream', () => {
   });
 
   it('handler can return multiple buffers', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:9000', {
       handler: () => [Buffer.from('part1'), Buffer.from('part2')],
     });
@@ -137,7 +137,7 @@ describe('VirtualSocket stream', () => {
   });
 
   it('handler returning null emits no data', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:9000', { handler: () => null });
     interceptor.install();
 
@@ -152,7 +152,7 @@ describe('VirtualSocket stream', () => {
   });
 
   it('emits close on destroy', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:9000', { handler: () => null });
     interceptor.install();
 
@@ -165,7 +165,7 @@ describe('VirtualSocket stream', () => {
   });
 
   it('handler errors are emitted on the socket', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:9000', {
       handler: () => { throw new Error('handler-boom'); },
     });
@@ -312,7 +312,7 @@ describe('virtual latency with clock', () => {
 
 describe('unmocked TCP safety', () => {
   it('throws SimNodeUnmockedTCPConnectionError for unknown hosts', () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.install();
 
     expect(() => net.createConnection(9999, 'unknown.host'))
@@ -320,7 +320,7 @@ describe('unmocked TCP safety', () => {
   });
 
   it('MySQL (port 3306) throws SimNodeUnsupportedProtocolError', () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.install();
 
     expect(() => net.createConnection(3306, 'db.prod.internal'))
@@ -332,7 +332,7 @@ describe('unmocked TCP safety', () => {
 
 describe('socket tracking', () => {
   it('records all created sockets', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:5432', { handler: () => null });
     interceptor.install();
 
@@ -343,7 +343,7 @@ describe('socket tracking', () => {
   });
 
   it('reset clears sockets and mocks', async () => {
-    interceptor = new TcpInterceptor();
+    interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.mock('localhost:5432', { handler: () => null });
     interceptor.install();
 

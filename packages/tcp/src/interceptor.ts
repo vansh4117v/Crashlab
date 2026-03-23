@@ -189,7 +189,10 @@ export class TcpInterceptor {
         } else if (clock && effectiveLatency > 0) {
           clock.setTimeout(() => { void deliver(); }, effectiveLatency);
         } else {
-          queueMicrotask(() => { void deliver(); });
+          throw new Error(
+            '[SimNode] local server: a Scheduler is required for deterministic I/O delivery. ' +
+            'Pass { scheduler } when constructing TcpInterceptor.',
+          );
         }
       });
     });
