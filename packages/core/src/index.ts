@@ -44,13 +44,17 @@ function _resolveScenarioPath(raw: string): string {
 
   // Strip the current extension (if any) and try alternatives
   const base = abs.replace(/\.(ts|js|mjs|cjs)$/, '');
+  const tried = [abs];
   for (const ext of ['.ts', '.js', '.mjs', '.cjs']) {
     const candidate = base + ext;
+    tried.push(candidate);
     if (existsSync(candidate)) return candidate;
   }
 
-  // Nothing found — return the original so the error message is clear
-  return abs;
+  throw new Error(
+    `[SimNode] Scenario file not found. Tried:\n` +
+    tried.map(p => `  ${p}`).join('\n'),
+  );
 }
 
 interface ScenarioDef {
@@ -99,11 +103,13 @@ type WorkerResult = ScenarioResult;
 export class Simulation {
   private _baseSeed: number;
   private _timeout: number;
+  private _workerGrace: number;
   private _scenarios: ScenarioDef[] = [];
 
-  constructor(opts?: { seed?: number; timeout?: number }) {
-    this._baseSeed = opts?.seed ?? 0;
-    this._timeout  = opts?.timeout ?? 30_000;
+  constructor(opts?: { seed?: number; timeout?: number; workerGrace?: number }) {
+    this._baseSeed    = opts?.seed        ?? 0;
+    this._timeout     = opts?.timeout     ?? 30_000;
+    this._workerGrace = opts?.workerGrace ?? 5_000;
   }
 
   /**
@@ -207,21 +213,17 @@ export class Simulation {
   }
 
   private async _runScenario(scenario: ScenarioDef, seed: number, mongo: MongoServerInfo): Promise<WorkerResult> {
-    const workerPayload: Record<string, unknown> = {
+    const workerPayload = {
       seed,
       scenarioName: scenario.name,
       timeout: this._timeout,
       mongoHost: mongo.host,
       mongoPort: mongo.port,
       mongoDbName: `sim_db_${seed}`,
+      ...(scenario.path
+        ? { scenarioPath: scenario.path }
+        : { fnSource: scenario.fn!.toString() }),
     };
-
-    if (scenario.path) {
-      workerPayload.scenarioPath = scenario.path;
-    } else {
-      // Legacy inline function — serialised for vm eval
-      workerPayload.fnSource = scenario.fn!.toString();
-    }
 
     const worker = new Worker(WORKER_SCRIPT, { workerData: workerPayload });
 
@@ -233,13 +235,12 @@ export class Simulation {
         // Main-thread watchdog: if the worker enters a sync infinite loop,
         // its internal timeout can never fire.  This outer timer guarantees
         // we always terminate the worker and reject.
-        const GRACE = 5_000;
         const watchdog = setTimeout(() => {
           if (!settled) {
             worker.terminate();
             reject(new Error(`Simulation timeout: worker thread hung for scenario "${scenario.name}"`));
           }
-        }, this._timeout + GRACE);
+        }, this._timeout + this._workerGrace);
         // Prevent the watchdog from keeping the process alive if everything
         // resolves normally.
         if (typeof watchdog === 'object' && 'unref' in watchdog) watchdog.unref();
