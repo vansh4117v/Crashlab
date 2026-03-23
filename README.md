@@ -213,6 +213,7 @@ npx simnode replay --seed=847 --scenario="double charge guard"
 const result = await sim.run({ seeds: 1000 });
 // result.passed    → boolean
 // result.passes    → number of seeds that passed
+// result.seedsRun  → total seeds executed (denominator for the summary line)
 // result.failures  → ScenarioResult[] (only failures; passing results are not retained)
 
 // Opt out of early stop to collect all failures
@@ -311,10 +312,11 @@ export default async function myScenario(env: SimEnv) {
   env.http          // HttpInterceptor — mock(), calls, unmatched handling
   env.tcp           // TcpInterceptor — mock(), addLocalServer()
   env.pg            // PgMock — seedData(), query(), ready(), createHandler()
-  env.redis         // RedisMock — seedData(), createHandler()
+  env.redis         // RedisMock — seedData(key, value), flush(), createHandler()
   env.mongo         // MongoMock — find(), drop(), createHandler()
   env.fs            // VirtualFS — readFileSync(), writeFileSync(), existsSync()
-  env.faults        // FaultInjector — diskFull(), clockSkew(), networkPartition()
+  env.faults        // FaultInjector — diskFull(), clockSkew(), networkPartition(), slowDatabase(), processRestart()
+  env.pump          // (ms, steps?) → Promise<void> — advance clock while yielding to the real event loop
   env.timeline      // Timeline — record({ timestamp, type, detail })
   env.seed          // number — the current run's seed value
 }
@@ -360,10 +362,10 @@ Each worker is fully isolated. Patches applied inside one worker never leak to t
 ## Contributing
 
 ```sh
-git clone https://github.com/your-org/simnode
+git clone https://github.com/simnodehq/simnode
 npm install
 npm run build
-npm test           # vitest — 179 tests
+npm test           # vitest — 182 tests
 ```
 
 All packages live under `packages/`. The monorepo uses npm workspaces + tsup for building. PRs must pass `npm test` with zero failures.
