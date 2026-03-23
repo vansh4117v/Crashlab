@@ -15,13 +15,14 @@ The entry point for all simulation work.
 #### Constructor
 
 ```ts
-new Simulation(opts?: { seed?: number; timeout?: number })
+new Simulation(opts?: { seed?: number; timeout?: number; workerGrace?: number })
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `seed` | `0` | Base seed. Each additional seed increments this by 1. |
 | `timeout` | `30_000` | Per-scenario timeout in ms before the worker is killed. |
+| `workerGrace` | `5_000` | Extra ms the main-thread watchdog waits beyond `timeout` before forcibly terminating a worker that has entered a synchronous infinite loop (the internal timeout cannot fire in that case). Reduce this if you want faster cleanup on hangs. |
 
 ---
 
@@ -152,7 +153,31 @@ interface SimEnv {
   timeline: Timeline;
   pump: (ms: number, steps?: number) => Promise<void>;
 }
+
+#### `pump()` vs `clock.advance()`
+
+Both methods advance virtual time, but they serve different purposes:
+
+| | `clock.advance(ms)` | `pump(ms, steps?)` |
+|---|---|---|
+| **Event loop** | Stays in the virtual tick — never yields to Node.js | Yields to the real host event loop between each step |
+| **Determinism** | Fully deterministic — same seed always produces identical execution | Less deterministic — real I/O timing can vary between runs |
+| **Use case** | All pure-virtual scenarios (mocked HTTP, mocked TCP, mocked DB) | Integration scenarios that drive real TCP connections (e.g. a running Express server via supertest) |
+| **Performance** | Instantaneous — no wall-clock time passes | Slow — each step waits ~1ms of real time |
+
+**Use `clock.advance()` for the vast majority of scenarios.** It is the correct tool whenever all I/O passes through SimNode's mock layer (HttpInterceptor, TcpInterceptor, PgMock, etc.).
+
+**Use `pump()` only** when your scenario starts a real TCP server (e.g. `app.listen()`) and makes requests against it. In that case, the request/response cycle goes through the real Node.js event loop and must be processed before the scheduler can drain its mock completions.
+
+```ts
+// Prefer this — purely virtual, fully deterministic
+await env.clock.advance(500);
+
+// Only when needed — real event loop involved
+await env.pump(500);
 ```
+
+---
 
 ### `Timeline`
 

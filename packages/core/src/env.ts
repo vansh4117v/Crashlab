@@ -76,6 +76,7 @@ export interface SimEnv {
    * drains pending completions at each step.
    *
    * Injected by the simulation worker after determinism patches are installed.
+   * See `packages/core/docs/API.md` for guidance on when to use `pump()` vs `clock.advance()`.
    */
   pump: (ms: number, steps?: number) => Promise<void>;
 }
