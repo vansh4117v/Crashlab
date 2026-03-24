@@ -11,6 +11,6 @@
     { "path": "packages/redis-mock" },
     { "path": "packages/filesystem" },
     { "path": "packages/core" },
-    { "path": "packages/simnode" }
+    { "path": "packages/crashlab" }
   ]
 }

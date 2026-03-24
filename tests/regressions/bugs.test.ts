@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { VirtualClock } from '@simnode/clock';
-import { SeededRandom, patchMathRandom } from '@simnode/random';
-import { TcpInterceptor } from '@simnode/tcp';
-import { HttpInterceptor } from '@simnode/http-proxy';
-import { VirtualFS } from '@simnode/filesystem';
+import { VirtualClock } from '@crashlab/clock';
+import { SeededRandom, patchMathRandom } from '@crashlab/random';
+import { TcpInterceptor } from '@crashlab/tcp';
+import { HttpInterceptor } from '@crashlab/http-proxy';
+import { VirtualFS } from '@crashlab/filesystem';
 import * as dns from 'node:dns';
 import * as crypto from 'node:crypto';
 import type * as fsTypes from 'node:fs';
@@ -32,7 +32,7 @@ describe('Regression & Integration Bugs', () => {
     vfs.install();
     uninstalls.push(() => vfs.uninstall());
     
-    const httpInstalled = (await import('@simnode/http-proxy')).install(httpInterceptor);
+    const httpInstalled = (await import('@crashlab/http-proxy')).install(httpInterceptor);
     uninstalls.push(httpInstalled.uninstall);
     
     tcpInterceptor.install();
@@ -41,7 +41,7 @@ describe('Regression & Integration Bugs', () => {
     rng.install();
     uninstalls.push(() => rng.uninstall());
     
-    const clockInstalled = (await import('@simnode/clock')).install(clock);
+    const clockInstalled = (await import('@crashlab/clock')).install(clock);
     uninstalls.push(clockInstalled.uninstall);
     
     try {

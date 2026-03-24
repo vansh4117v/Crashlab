@@ -6,5 +6,5 @@ export default defineConfig({
   clean: true,
   shims: true,
   sourcemap: true,
-  external: ["@simnode/core"],
+  external: ["@crashlab/core"],
 });

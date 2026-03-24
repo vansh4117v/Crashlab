@@ -25,7 +25,7 @@ function _resolveWorkerScript(): string {
     throw new Error(
       `SimNode: Cannot locate simulation-worker.js. Searched:\n` +
       candidates.map(p => `  - ${p}`).join('\n') +
-      `\nRun \`npm run build\` in @simnode/core first.`,
+      `\nRun \`npm run build\` in @crashlab/core first.`,
     );
   }
   return found;
@@ -298,5 +298,5 @@ async function _stopMongo(info: MongoServerInfo): Promise<void> {
   try { await info.stop(); } catch { /* ignore */ }
 }
 
-// Redis is now fully in-memory (ioredis-mock inside @simnode/redis-mock).
+// Redis is now fully in-memory (ioredis-mock inside @crashlab/redis-mock).
 // No external server lifecycle needed.

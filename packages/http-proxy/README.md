@@ -1,12 +1,12 @@
-# @simnode/http-proxy
+# @crashlab/http-proxy
 
-Lightweight HTTP interceptor for deterministic simulation testing. Patches `http.request`/`https.request`, records calls, serves static mocks, and integrates with `@simnode/clock` for virtual latency.
+Lightweight HTTP interceptor for deterministic simulation testing. Patches `http.request`/`https.request`, records calls, serves static mocks, and integrates with `@crashlab/clock` for virtual latency.
 
 ## Usage
 
 ```ts
-import { HttpInterceptor } from '@simnode/http-proxy';
-import { VirtualClock } from '@simnode/clock';
+import { HttpInterceptor } from '@crashlab/http-proxy';
+import { VirtualClock } from '@crashlab/clock';
 import * as http from 'node:http';
 
 const clock = new VirtualClock(0);

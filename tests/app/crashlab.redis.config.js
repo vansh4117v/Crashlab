@@ -1,4 +1,4 @@
-import { Simulation } from "simnode";
+import { Simulation } from "crashlab";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,8 +7,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sim = new Simulation({ seed: 0 });
 
 sim.scenario(
-  "fault injection combo",
-  path.join(__dirname, "scenarios", "fault-combo.scenario.js")
+  "redis cache stampede",
+  path.join(__dirname, "scenarios", "redis-stampede.scenario.js")
 );
 
 export default sim;

@@ -20,7 +20,7 @@ function fmtMs(ms: number): string {
   return mins > 0 ? `${mins}m ${secs % 60}s` : `${secs}s`;
 }
 
-/** Load a simnode config file and return the Simulation instance. */
+/** Load a crashlab config file and return the Simulation instance. */
 async function loadSim(configPath: string): Promise<any> {
   const abs = path.resolve(configPath);
   let mod: any;
@@ -53,9 +53,9 @@ async function main(): Promise<void> {
   if (!command || command === '--help') {
     console.log([
       'Usage:',
-      '  simnode run   [--config=<path>] [--seeds=<N>] [--stop-on-first-failure=<bool>]',
-      '  simnode replay --seed=<N> --scenario="<name>" [--config=<path>]',
-      '  simnode hunt  <scenario-path>  [--timeout=<duration>]',
+      '  crashlab run   [--config=<path>] [--seeds=<N>] [--stop-on-first-failure=<bool>]',
+      '  crashlab replay --seed=<N> --scenario="<name>" [--config=<path>]',
+      '  crashlab hunt  <scenario-path>  [--timeout=<duration>]',
       '',
       'Duration format: 30s | 5m | 1h',
     ].join('\n'));
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
 
   // ── run ──────────────────────────────────────────────────────────────────
   if (command === 'run') {
-    const sim = await loadSim(getArg('config') ?? 'simnode.config.js');
+    const sim = await loadSim(getArg('config') ?? 'crashlab.config.js');
     const seeds = parseInt(getArg('seeds') ?? '1');
     const stopRaw = getArg('stop-on-first-failure');
     const stopOnFirstFailure = stopRaw === undefined ? true : stopRaw !== 'false';
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
 
   // ── replay ───────────────────────────────────────────────────────────────
   if (command === 'replay') {
-    const sim = await loadSim(getArg('config') ?? 'simnode.config.js');
+    const sim = await loadSim(getArg('config') ?? 'crashlab.config.js');
     const seed = parseInt(getArg('seed') ?? '0');
     const scenario = getArg('scenario');
     if (!scenario) { console.error('--scenario required'); process.exit(1); }
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
   if (command === 'hunt') {
     const scenarioArg = args[1];
     if (!scenarioArg || scenarioArg.startsWith('--')) {
-      console.error('Usage: simnode hunt <scenario-path> [--timeout=<duration>]');
+      console.error('Usage: crashlab hunt <scenario-path> [--timeout=<duration>]');
       process.exit(1);
     }
 
@@ -137,7 +137,7 @@ async function main(): Promise<void> {
       console.log('\nTimeline:');
       console.log(f.timeline.split('\n').map((l: string) => '  ' + l).join('\n'));
       console.log('\nReplay command:');
-      console.log(`  simnode replay --seed=${f.seed} --scenario="${f.name}" --config=<your-config>`);
+      console.log(`  crashlab replay --seed=${f.seed} --scenario="${f.name}" --config=<your-config>`);
       process.exit(1);
     }
 

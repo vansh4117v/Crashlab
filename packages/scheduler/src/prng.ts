@@ -2,8 +2,8 @@
  * Mulberry32 — fast 32-bit seeded PRNG.
  * Returns a function yielding numbers in [0, 1).
  *
- * This is a self-contained fallback so `@simnode/scheduler` has zero
- * hard dependencies.  If `@simnode/random` is available in the monorepo,
+ * This is a self-contained fallback so `@crashlab/scheduler` has zero
+ * hard dependencies.  If `@crashlab/random` is available in the monorepo,
  * consumers can pass their own SeededRandom instead.
  */
 export function mulberry32(seed: number): () => number {

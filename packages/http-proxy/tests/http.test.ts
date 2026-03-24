@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import type * as httpTypes from 'node:http';
 import { HttpInterceptor } from '../src/index.js';
-import { VirtualClock } from '@simnode/clock';
-import { Scheduler } from '@simnode/scheduler';
+import { VirtualClock } from '@crashlab/clock';
+import { Scheduler } from '@crashlab/scheduler';
 
 // Use CJS require so we read the SAME mutable module the interceptor patches.
 const _require = createRequire(import.meta.url);

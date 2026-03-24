@@ -1,10 +1,10 @@
-import { VirtualClock } from '@simnode/clock';
-import { install as installClock } from '@simnode/clock';
-import { SeededRandom, mulberry32 } from '@simnode/random';
-import { Scheduler } from '@simnode/scheduler';
-import { HttpInterceptor } from '@simnode/http-proxy';
-import { TcpInterceptor } from '@simnode/tcp';
-import { VirtualFS } from '@simnode/filesystem';
+import { VirtualClock } from '@crashlab/clock';
+import { install as installClock } from '@crashlab/clock';
+import { SeededRandom, mulberry32 } from '@crashlab/random';
+import { Scheduler } from '@crashlab/scheduler';
+import { HttpInterceptor } from '@crashlab/http-proxy';
+import { TcpInterceptor } from '@crashlab/tcp';
+import { VirtualFS } from '@crashlab/filesystem';
 import { createRequire } from 'node:module';
 
 const _require = createRequire(import.meta.url);
@@ -28,27 +28,27 @@ export class Timeline {
 }
 
 // ── Optional-mock interfaces ─────────────────────────────────────────────────
-// Defined locally so @simnode/core has zero type-level dependency on the heavy
-// mock packages.  The concrete classes (@simnode/pg-mock etc.) satisfy these
+// Defined locally so @crashlab/core has zero type-level dependency on the heavy
+// mock packages.  The concrete classes (@crashlab/pg-mock etc.) satisfy these
 // interfaces via TypeScript structural typing.
 
 export interface PgMockLike {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
   seedData(table: string, rows: Record<string, unknown>[]): void;
   ready(): Promise<void>;
-  createHandler(): import('@simnode/tcp').TcpMockHandler;
+  createHandler(): import('@crashlab/tcp').TcpMockHandler;
 }
 
 export interface RedisMockLike {
   seedData(key: string, value: string): void;
   flush(): Promise<void>;
-  createHandler(): import('@simnode/tcp').TcpMockHandler;
+  createHandler(): import('@crashlab/tcp').TcpMockHandler;
 }
 
 export interface MongoMockLike {
   find(collection: string, filter?: Record<string, unknown>): Promise<Record<string, unknown>[]>;
   drop(): Promise<void>;
-  createHandler(): import('@simnode/tcp').TcpMockHandler;
+  createHandler(): import('@crashlab/tcp').TcpMockHandler;
 }
 
 // ── SimEnv ────────────────────────────────────────────────────────────────────
@@ -61,11 +61,11 @@ export interface SimEnv {
   http: HttpInterceptor;
   tcp: TcpInterceptor;
   fs: VirtualFS;
-  /** null when @simnode/pg-mock is not installed */
+  /** null when @crashlab/pg-mock is not installed */
   pg: PgMockLike | null;
-  /** null when @simnode/redis-mock is not installed */
+  /** null when @crashlab/redis-mock is not installed */
   redis: RedisMockLike | null;
-  /** null when @simnode/mongo is not installed */
+  /** null when @crashlab/mongo is not installed */
   mongo: MongoMockLike | null;
   faults: FaultInjector;
   timeline: Timeline;
@@ -166,7 +166,7 @@ export class FaultInjector {
 function _tryAddLocalServer(
   tcp: TcpInterceptor,
   port: number,
-  handler: import('@simnode/tcp').TcpMockHandler,
+  handler: import('@crashlab/tcp').TcpMockHandler,
   timeline: Timeline,
 ): void {
   try {
@@ -214,28 +214,28 @@ export async function createEnv(seed: number, mongoOpts?: MongoOpts): Promise<Si
   const timeline = new Timeline();
 
   // Heavy mock packages — loaded lazily and optionally.  Each is wrapped in a
-  // try/catch so @simnode/core works even when a mock is not installed.
+  // try/catch so @crashlab/core works even when a mock is not installed.
   let pg: PgMockLike | null = null;
   let redis: RedisMockLike | null = null;
   let mongo: MongoMockLike | null = null;
 
   try {
-    const { PgMock } = await import('@simnode/pg-mock');
+    const { PgMock } = await import('@crashlab/pg-mock');
     pg = new PgMock();
     // Ensure PGlite WASM is fully initialised BEFORE determinism patches
     // replace setTimeout — PGlite's init may use real timers internally.
     await (pg as { ready(): Promise<void> }).ready();
-  } catch { /* @simnode/pg-mock not installed — pg stays null */ }
+  } catch { /* @crashlab/pg-mock not installed — pg stays null */ }
 
   try {
-    const { RedisMock } = await import('@simnode/redis-mock');
+    const { RedisMock } = await import('@crashlab/redis-mock');
     redis = new RedisMock();
-  } catch { /* @simnode/redis-mock not installed — redis stays null */ }
+  } catch { /* @crashlab/redis-mock not installed — redis stays null */ }
 
   try {
-    const { MongoMock } = await import('@simnode/mongo');
+    const { MongoMock } = await import('@crashlab/mongo');
     mongo = new MongoMock(mongoOpts);
-  } catch { /* @simnode/mongo not installed — mongo stays null */ }
+  } catch { /* @crashlab/mongo not installed — mongo stays null */ }
 
   const env: SimEnv = {
     seed, clock, random, scheduler,

@@ -1,4 +1,4 @@
-# @simnode/random — API Reference
+# @crashlab/random — API Reference
 
 ## Responsibility
 
@@ -56,10 +56,10 @@ Restore the originals. Called in the worker's `finally` block.
 
 ### `mulberry32(seed: number): () => number`
 
-Returns a raw PRNG function that generates floats in `[0, 1)`. The underlying algorithm for all determinism in SimNode.
+Returns a raw PRNG function that generates floats in `[0, 1)`. The underlying algorithm for all determinism in CrashLab.
 
 ```ts
-import { mulberry32 } from '@simnode/random';
+import { mulberry32 } from '@crashlab/random';
 const rng = mulberry32(12345);
 rng(); // 0.4242... 
 rng(); // 0.7891...
@@ -70,7 +70,7 @@ rng(); // 0.7891...
 Run a function with `Math.random` temporarily replaced by a seeded PRNG. Restores the original when done.
 
 ```ts
-import { patchMathRandom } from '@simnode/random';
+import { patchMathRandom } from '@crashlab/random';
 const id = patchMathRandom(42, () => generateRandomId());
 // generateRandomId() used the seeded PRNG, not crypto random
 ```

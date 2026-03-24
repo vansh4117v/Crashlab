@@ -1,5 +1,5 @@
 {
-  "name": "simnode-test-app",
+  "name": "crashlab-test-app",
   "private": true,
   "type": "module",
   "dependencies": {

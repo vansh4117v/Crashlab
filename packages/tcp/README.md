@@ -1,13 +1,13 @@
-# @simnode/tcp
+# @crashlab/tcp
 
-TCP interception layer for SimNode. Patches `net.createConnection`, `net.connect`, and `net.Socket.prototype.connect` to route all outbound TCP connections through registered mock handlers. No real network I/O ever occurs.
+TCP interception layer for CrashLab. Patches `net.createConnection`, `net.connect`, and `net.Socket.prototype.connect` to route all outbound TCP connections through registered mock handlers. No real network I/O ever occurs.
 
 ## Usage
 
 ```ts
-import { TcpInterceptor } from '@simnode/tcp';
-import { VirtualClock } from '@simnode/clock';
-import { Scheduler } from '@simnode/scheduler';
+import { TcpInterceptor } from '@crashlab/tcp';
+import { VirtualClock } from '@crashlab/clock';
+import { Scheduler } from '@crashlab/scheduler';
 
 const clock = new VirtualClock(0);
 const scheduler = new Scheduler({ prngSeed: 42 });
@@ -34,4 +34,4 @@ tcp.uninstall();
 
 ## Safety
 
-Unmocked connections throw `SimNodeUnmockedTCPConnectionError` — preventing any real network access during simulation.
+Unmocked connections throw `CrashLabUnmockedTCPConnectionError` — preventing any real network access during simulation.

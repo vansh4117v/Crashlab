@@ -1,4 +1,4 @@
-# @simnode/scheduler — API Reference
+# @crashlab/scheduler — API Reference
 
 ## Responsibility
 
@@ -94,7 +94,7 @@ Within a single virtual timestamp, the execution order of concurrent completions
 1. **Stable-sorted** by `when` ascending (earlier ops run first across different timestamps).
 2. **PRNG-shuffled** within each group of ops sharing the exact same `when` value.
 
-This means each seed produces a unique, reproducible interleaving of concurrent operations — which is how SimNode discovers race conditions.
+This means each seed produces a unique, reproducible interleaving of concurrent operations — which is how CrashLab discovers race conditions.
 
 ---
 

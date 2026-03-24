@@ -1,4 +1,4 @@
-import { Simulation } from "simnode";
+import { Simulation } from "crashlab";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

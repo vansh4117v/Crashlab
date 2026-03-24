@@ -1,4 +1,4 @@
-import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@simnode/tcp';
+import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@crashlab/tcp';
 import * as proto from './protocol.js';
 
 export class SimNodeUnsupportedPGFeature extends Error {

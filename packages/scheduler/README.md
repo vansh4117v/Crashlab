@@ -1,11 +1,11 @@
-# @simnode/scheduler
+# @crashlab/scheduler
 
 Cooperative deterministic scheduler for mock I/O boundaries. Holds enqueued completions until their virtual time arrives, then releases them in a PRNG-shuffled order — making all macro-level race conditions fully reproducible with the same seed. Does **not** intercept V8 microtasks or Promise internals.
 
 ## Usage
 
 ```ts
-import { Scheduler } from '@simnode/scheduler';
+import { Scheduler } from '@crashlab/scheduler';
 
 const sched = new Scheduler({ prngSeed: 42 });
 
@@ -21,7 +21,7 @@ await sched.runTick(80);
 ## Clock integration
 
 ```ts
-import { VirtualClock } from '@simnode/clock';
+import { VirtualClock } from '@crashlab/clock';
 
 const clock = new VirtualClock(0);
 const sched = new Scheduler({ clock, prngSeed: 42 });

@@ -1,11 +1,11 @@
-# @simnode/clock
+# @crashlab/clock
 
 Deterministic virtual clock for Node.js. Replaces `Date`, `setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`, and `performance.now()` with manually-controllable fakes.
 
 ## Usage
 
 ```ts
-import { VirtualClock, install } from '@simnode/clock';
+import { VirtualClock, install } from '@crashlab/clock';
 
 // Standalone (no global patching)
 const clock = new VirtualClock(0);

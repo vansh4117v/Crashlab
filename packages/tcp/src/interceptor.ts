@@ -6,7 +6,7 @@ import { patchDns, registerMockedHost, clearMockedHosts, dnsConfig } from './dns
 import type { IClock, IScheduler, TcpMockConfig, TcpMockHandler } from './types.js';
 import { SimNodeUnmockedTCPConnectionError, SimNodeUnsupportedProtocolError } from './types.js';
 
-// CJS reference for mutable patching (same technique as @simnode/http-proxy)
+// CJS reference for mutable patching (same technique as @crashlab/http-proxy)
 const _require = createRequire(import.meta.url);
 const netCjs = _require('node:net') as typeof net;
 const dnsCjs = _require('node:dns') as typeof dns;

@@ -1,5 +1,5 @@
 /**
- * Minimal clock interface (duck-typed — no hard dep on @simnode/clock).
+ * Minimal clock interface (duck-typed — no hard dep on @crashlab/clock).
  *
  * When the clock advances to time `t`, it should call:
  *   await scheduler.runTick(t)

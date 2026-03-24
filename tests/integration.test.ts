@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import type * as httpTypes from 'node:http';
-import { VirtualClock } from '@simnode/clock';
-import { SeededRandom } from '@simnode/random';
-import { HttpInterceptor } from '@simnode/http-proxy';
-import { Scheduler } from '@simnode/scheduler';
+import { VirtualClock } from '@crashlab/clock';
+import { SeededRandom } from '@crashlab/random';
+import { HttpInterceptor } from '@crashlab/http-proxy';
+import { Scheduler } from '@crashlab/scheduler';
 
 const _require = createRequire(import.meta.url);
 const http: typeof httpTypes = _require('node:http');

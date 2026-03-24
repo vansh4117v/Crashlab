@@ -15,7 +15,7 @@ import { workerData, parentPort } from 'node:worker_threads';
 import { readFileSync } from 'node:fs';
 import * as vm from 'node:vm';
 import { createRequire } from 'node:module';
-import { createFetchPatch } from '@simnode/http-proxy';
+import { createFetchPatch } from '@crashlab/http-proxy';
 import { createEnv, installDeterminismPatches } from './env.js';
 import type { SimEnv } from './env.js';
 

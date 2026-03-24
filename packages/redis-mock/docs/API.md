@@ -1,4 +1,4 @@
-# @simnode/redis-mock — API Reference
+# @crashlab/redis-mock — API Reference
 
 ## Responsibility
 

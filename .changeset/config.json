@@ -3,9 +3,9 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [
-    ["simnode", "@simnode/core", "@simnode/clock", "@simnode/filesystem", "@simnode/http-proxy",
-     "@simnode/mongo", "@simnode/pg-mock", "@simnode/random", "@simnode/redis-mock",
-     "@simnode/scheduler", "@simnode/tcp"]
+    ["crashlab", "@crashlab/core", "@crashlab/clock", "@crashlab/filesystem", "@crashlab/http-proxy",
+     "@crashlab/mongo", "@crashlab/pg-mock", "@crashlab/random", "@crashlab/redis-mock",
+     "@crashlab/scheduler", "@crashlab/tcp"]
   ],
   "linked": [],
   "access": "public",

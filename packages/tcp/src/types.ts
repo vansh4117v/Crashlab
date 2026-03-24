@@ -1,6 +1,6 @@
 /**
  * Duck-typed interfaces for clock and scheduler integration.
- * No hard dependency on @simnode/clock or @simnode/scheduler.
+ * No hard dependency on @crashlab/clock or @crashlab/scheduler.
  */
 
 /** Minimal virtual-clock interface. */

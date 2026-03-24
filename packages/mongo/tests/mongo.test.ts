@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
 import { MongoMock } from '../src/index.js';
-import { TcpInterceptor } from '@simnode/tcp';
-import { Scheduler } from '@simnode/scheduler';
+import { TcpInterceptor } from '@crashlab/tcp';
+import { Scheduler } from '@crashlab/scheduler';
 
 const _require = createRequire(import.meta.url);
 

@@ -1,4 +1,4 @@
-# @simnode/tcp — API Reference
+# @crashlab/tcp — API Reference
 
 ## Responsibility
 
@@ -89,15 +89,15 @@ Not intended for direct use — created automatically by `TcpInterceptor` when a
 
 ## Error Classes
 
-### `SimNodeUnmockedTCPConnectionError`
+### `CrashLabUnmockedTCPConnectionError`
 
 Thrown when an app attempts a TCP connection to a `host:port` that has no registered mock and is not a local address.
 
 ```ts
-import { SimNodeUnmockedTCPConnectionError } from '@simnode/tcp';
+import { CrashLabUnmockedTCPConnectionError } from '@crashlab/tcp';
 ```
 
-### `SimNodeUnsupportedProtocolError`
+### `CrashLabUnsupportedProtocolError`
 
 Thrown when a connection lands on a mock but the handler cannot parse the protocol (e.g. TLS inside a plain mock).
 

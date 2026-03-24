@@ -1,5 +1,5 @@
 {
-  "name": "@simnode/pg-mock",
+  "name": "@crashlab/pg-mock",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",

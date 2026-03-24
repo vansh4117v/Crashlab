@@ -1,5 +1,5 @@
 /**
- * @simnode/mongo
+ * @crashlab/mongo
  *
  * MongoDB mock backed by a shared MongoMemoryServer (started once per
  * Simulation.run()).  Connections are proxied verbatim to the real mongod
@@ -7,7 +7,7 @@
  * encoding is needed here.
  */
 
-import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@simnode/tcp';
+import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@crashlab/tcp';
 import * as net from 'node:net';
 
 // ---------------------------------------------------------------------------

@@ -1,13 +1,23 @@
 {
-  "name": "simnode",
+  "name": "crashlab",
   "version": "0.1.0",
   "license": "MIT",
+  "keywords": [
+    "crashlab",
+    "simulation",
+    "deterministic",
+    "testing",
+    "race-conditions",
+    "nodejs",
+    "virtual-clock",
+    "fault-injection"
+  ],
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "simnode": "dist/cli.js"
+    "crashlab": "dist/cli.js"
   },
   "exports": {
     ".": {
@@ -26,10 +36,10 @@
     "build:pkg": "tsup && tsc --build tsconfig.json --force"
   },
   "dependencies": {
-    "@simnode/core": "0.1.0",
-    "@simnode/mongo": "0.1.0",
-    "@simnode/pg-mock": "0.1.0",
-    "@simnode/redis-mock": "0.1.0",
+    "@crashlab/core": "0.1.0",
+    "@crashlab/mongo": "0.1.0",
+    "@crashlab/pg-mock": "0.1.0",
+    "@crashlab/redis-mock": "0.1.0",
     "mongodb-memory-server": "^10.0.0"
   }
 }

@@ -1,8 +1,8 @@
-# SimNode — Deterministic Simulation Testing for Node.js
+# CrashLab — Deterministic Simulation Testing for Node.js
 
 **Find 1-in-a-million race conditions in milliseconds, not months.**
 
-SimNode runs your application code inside a fully controlled simulation: virtual time, seeded randomness, and deterministic I/O scheduling. Every concurrency bug that would normally require weeks of load testing to surface can be reproduced on demand, debugged with a single seed, and guarded against regression forever.
+CrashLab runs your application code inside a fully controlled simulation: virtual time, seeded randomness, and deterministic I/O scheduling. Every concurrency bug that would normally require weeks of load testing to surface can be reproduced on demand, debugged with a single seed, and guarded against regression forever.
 
 ---
 
@@ -21,7 +21,7 @@ async function charge(userId: string, amount: number) {
 
 A **double-payment race condition** is buried here. Two concurrent requests both read the same balance, both pass the guard, and both charge the card — but only one debits the account. This bug requires two requests to arrive within a ~200ms window. In a Jest or Vitest test suite, your async calls resolve sequentially; the window never opens and the test always passes.
 
-**SimNode compresses virtual time and shuffles I/O resolution order.** Across 1,000 seeds it explores every possible interleaving of those two awaits. Seed 847 opens the exact window. You get a failing test, a full timeline, and a replay command — before this ships.
+**CrashLab compresses virtual time and shuffles I/O resolution order.** Across 1,000 seeds it explores every possible interleaving of those two awaits. Seed 847 opens the exact window. You get a failing test, a full timeline, and a replay command — before this ships.
 
 ---
 
@@ -30,7 +30,7 @@ A **double-payment race condition** is buried here. Two concurrent requests both
 **`scenarios/charge.scenario.ts`** — the file your team ships alongside the code:
 
 ```typescript
-import type { SimEnv } from 'simnode';
+import type { SimEnv } from 'crashlab';
 
 export default async function chargeScenario(env: SimEnv) {
   // Mock Stripe: 200ms virtual latency, deterministic response
@@ -73,10 +73,10 @@ export default async function chargeScenario(env: SimEnv) {
 }
 ```
 
-**`simnode.config.js`** — wire it to the harness:
+**`crashlab.config.js`** — wire it to the harness:
 
 ```javascript
-import { Simulation } from 'simnode';
+import { Simulation } from 'crashlab';
 import { resolve } from 'node:path';
 
 const sim = new Simulation({ timeout: 15_000 });
@@ -105,7 +105,7 @@ These three pillars together mean: **if a race condition is possible, a seed wil
 
 ## CLI Usage
 
-SimNode has two operating modes and a replay command:
+CrashLab has two operating modes and a replay command:
 
 | | `run` | `hunt` |
 |---|---|---|
@@ -117,16 +117,16 @@ SimNode has two operating modes and a replay command:
 
 ---
 
-### `simnode run` — fixed seed count, CI mode
+### `crashlab run` — fixed seed count, CI mode
 
 ```sh
-npx simnode run --seeds=1000
+npx crashlab run --seeds=1000
 ```
 
 Stops at the **first failure** by default (`stopOnFirstFailure: true`). To collect all failures across all seeds:
 
 ```sh
-npx simnode run --seeds=1000 --stop-on-first-failure=false
+npx crashlab run --seeds=1000 --stop-on-first-failure=false
 ```
 
 **Output:**
@@ -148,13 +148,13 @@ npx simnode run --seeds=1000 --stop-on-first-failure=false
 
 ---
 
-### `simnode hunt` — time-budget mode, local debugging
+### `crashlab hunt` — time-budget mode, local debugging
 
 Hunt mode runs as many seeds as it can fit within a time budget and stops the moment it finds a failure. There is no seed count — just run until you find something.
 
 ```sh
-npx simnode hunt ./scenarios/charge.scenario.ts
-npx simnode hunt ./scenarios/charge.scenario.ts --timeout=10m
+npx crashlab hunt ./scenarios/charge.scenario.ts
+npx crashlab hunt ./scenarios/charge.scenario.ts --timeout=10m
 ```
 
 Duration format: `30s` | `5m` | `1h`. Default: `5m`.
@@ -179,7 +179,7 @@ Timeline:
   ...
 
 Replay command:
-  simnode replay --seed=482910344 --scenario="charge.scenario" --config=simnode.config.js
+  crashlab replay --seed=482910344 --scenario="charge.scenario" --config=crashlab.config.js
 ```
 
 If no failure is found within the budget:
@@ -188,17 +188,17 @@ No failure found after 1247 seeds in 5m 0s (timeout after 5m 0s).
 Your scenario may be correct, or the bug requires a specific condition not yet explored.
 ```
 
-Press **Ctrl+C** to stop early — SimNode finishes the current seed, discards its result (it may have been interrupted mid-flight), and exits cleanly with code `0`:
+Press **Ctrl+C** to stop early — CrashLab finishes the current seed, discards its result (it may have been interrupted mid-flight), and exits cleanly with code `0`:
 ```
 No failure found after 1247 seeds in 2m 14s (interrupted by Ctrl+C).
 ```
 
 ---
 
-### `simnode replay` — reproduce a specific failure
+### `crashlab replay` — reproduce a specific failure
 
 ```sh
-npx simnode replay --seed=847 --scenario="double charge guard"
+npx crashlab replay --seed=847 --scenario="double charge guard"
 ```
 
 > [!TIP]
@@ -228,7 +228,7 @@ const replay = await sim.replay({ seed: 847, scenario: 'double charge guard' });
 ### Custom config path
 
 ```sh
-npx simnode run --config=./tests/sim/simnode.config.js --seeds=500
+npx crashlab run --config=./tests/sim/crashlab.config.js --seeds=500
 ```
 
 ---
@@ -238,41 +238,41 @@ npx simnode run --config=./tests/sim/simnode.config.js --seeds=500
 ### Batteries-included (recommended)
 
 ```sh
-npm install --save-dev simnode
+npm install --save-dev crashlab
 ```
 
-`simnode` includes every mock: Postgres (PGlite), MongoDB (MongoMemoryServer), Redis (ioredis-mock), HTTP, TCP, virtual clock, PRNG, filesystem. Install this and you are done.
+`crashlab` includes every mock: Postgres (PGlite), MongoDB (MongoMemoryServer), Redis (ioredis-mock), HTTP, TCP, virtual clock, PRNG, filesystem. Install this and you are done.
 
 ### À la carte
 
 If you only need a subset of the mocks — say, virtual time and HTTP interception with no database overhead — install the lightweight engine and only the layers you need:
 
 ```sh
-npm install --save-dev @simnode/core @simnode/clock @simnode/http-proxy
+npm install --save-dev @crashlab/core @crashlab/clock @crashlab/http-proxy
 ```
 
-`@simnode/core` ships the `Simulation` class, CLI runner, and worker engine. It has **no dependency on PGlite, MongoDB, or Redis**. Mocks that are not installed simply appear as `null` on `env.pg`, `env.redis`, and `env.mongo`.
+`@crashlab/core` ships the `Simulation` class, CLI runner, and worker engine. It has **no dependency on PGlite, MongoDB, or Redis**. Mocks that are not installed simply appear as `null` on `env.pg`, `env.redis`, and `env.mongo`.
 
 Available sub-packages:
 
 | Package | What it provides |
 |---|---|
-| `@simnode/core` | `Simulation` class, CLI, worker engine |
-| `@simnode/clock` | `VirtualClock` |
-| `@simnode/random` | `SeededRandom` |
-| `@simnode/scheduler` | `Scheduler` |
-| `@simnode/http-proxy` | `HttpInterceptor` |
-| `@simnode/tcp` | `TcpInterceptor` |
-| `@simnode/filesystem` | `VirtualFS` |
-| `@simnode/pg-mock` | `PgMock` (PGlite) |
-| `@simnode/redis-mock` | `RedisMock` (ioredis-mock) |
-| `@simnode/mongo` | `MongoMock` (MongoMemoryServer) |
+| `@crashlab/core` | `Simulation` class, CLI, worker engine |
+| `@crashlab/clock` | `VirtualClock` |
+| `@crashlab/random` | `SeededRandom` |
+| `@crashlab/scheduler` | `Scheduler` |
+| `@crashlab/http-proxy` | `HttpInterceptor` |
+| `@crashlab/tcp` | `TcpInterceptor` |
+| `@crashlab/filesystem` | `VirtualFS` |
+| `@crashlab/pg-mock` | `PgMock` (PGlite) |
+| `@crashlab/redis-mock` | `RedisMock` (ioredis-mock) |
+| `@crashlab/mongo` | `MongoMock` (MongoMemoryServer) |
 
 ---
 
 ## Support Matrix
 
-| Protocol / Driver | SimNode Support | Notes |
+| Protocol / Driver | CrashLab Support | Notes |
 |---|---|---|
 | **PostgreSQL** | ✅ Full | PGlite in-process — wire-protocol compatible |
 | **MongoDB** | ✅ Full | Proxied to MongoMemoryServer per-run |
@@ -280,30 +280,30 @@ Available sub-packages:
 | **HTTP / Fetch** | ✅ Full | `http.request`, `https.request`, `globalThis.fetch` |
 | **Prisma** | ✅ Compatible | Loopback TCP servers on 5432 / 27017 / 6379 |
 | **ioredis / mongoose / pg** | ✅ Compatible | Client-side module patch — zero config |
-| **MySQL** | ❌ Not supported | Port 3306 throws `SimNodeUnsupportedProtocolError` in v1.0 |
+| **MySQL** | ❌ Not supported | Port 3306 throws `CrashLabUnsupportedProtocolError` in v1.0 |
 
 > [!NOTE]
-> **Prisma compatibility:** SimNode binds real loopback TCP servers on 127.0.0.1:5432, :6379, and :27017, so Prisma's out-of-process Rust query engine connects to the same mocks as your in-process drivers. If a real database is running on those ports, SimNode records a `WARNING` in the timeline and falls back to the client-side interceptor.
+> **Prisma compatibility:** CrashLab binds real loopback TCP servers on 127.0.0.1:5432, :6379, and :27017, so Prisma's out-of-process Rust query engine connects to the same mocks as your in-process drivers. If a real database is running on those ports, CrashLab records a `WARNING` in the timeline and falls back to the client-side interceptor.
 
 ---
 
 ## Honest Limitations
 
-SimNode is precise about what it controls. Senior engineers deserve a straight answer:
+CrashLab is precise about what it controls. Senior engineers deserve a straight answer:
 
 | Limitation | Reason |
 |---|---|
-| **Native C++ addons** | Native code runs outside the V8 sandbox. `require('better-sqlite3')` or `bcrypt` bypass all module patches. Use pure-JS alternatives in scenarios, or wrap them in an HTTP service that SimNode can mock. |
-| **Engine-level microtask interleaving** | V8's microtask queue is not observable from userland. SimNode controls macro-task and I/O scheduling; it cannot reorder `Promise.resolve()` chains that don't yield to the event loop. |
-| **`worker_threads` spawned by your app** | Child workers inherit real globals, not SimNode's patched ones. Scenarios should avoid code paths that spawn workers; use the simulation environment's own concurrency tools instead. |
-| **True wall-clock timers** | Any library that calls the real `setTimeout` before SimNode installs its patch (e.g. at module evaluation time) will use real time. Import order matters. |
+| **Native C++ addons** | Native code runs outside the V8 sandbox. `require('better-sqlite3')` or `bcrypt` bypass all module patches. Use pure-JS alternatives in scenarios, or wrap them in an HTTP service that CrashLab can mock. |
+| **Engine-level microtask interleaving** | V8's microtask queue is not observable from userland. CrashLab controls macro-task and I/O scheduling; it cannot reorder `Promise.resolve()` chains that don't yield to the event loop. |
+| **`worker_threads` spawned by your app** | Child workers inherit real globals, not CrashLab's patched ones. Scenarios should avoid code paths that spawn workers; use the simulation environment's own concurrency tools instead. |
+| **True wall-clock timers** | Any library that calls the real `setTimeout` before CrashLab installs its patch (e.g. at module evaluation time) will use real time. Import order matters. |
 
 ---
 
 ## Scenario API Reference
 
 ```typescript
-import type { SimEnv } from 'simnode';
+import type { SimEnv } from 'crashlab';
 
 export default async function myScenario(env: SimEnv) {
   env.clock         // VirtualClock — advance(), now(), setTimeout(), setInterval()
@@ -329,25 +329,25 @@ export default async function myScenario(env: SimEnv) {
 ### Package split
 
 ```
-npm install simnode               ← batteries-included (re-exports @simnode/core + all mocks)
-npm install @simnode/core         ← lightweight engine only (no PGlite / MongoDB / Redis)
+npm install crashlab             ← batteries-included (re-exports @crashlab/core + all mocks)
+npm install @crashlab/core         ← lightweight engine only (no PGlite / MongoDB / Redis)
 ```
 
-`@simnode/core` declares the heavy mock packages as **optional peer dependencies**. If they are not installed `env.pg`, `env.redis`, and `env.mongo` are `null`. The `simnode` wrapper lists them as required dependencies, guaranteeing they are always present.
+`@crashlab/core` declares the heavy mock packages as **optional peer dependencies**. If they are not installed `env.pg`, `env.redis`, and `env.mongo` are `null`. The `crashlab` wrapper lists them as required dependencies, guaranteeing they are always present.
 
 ### Runtime flow
 
 ```
-Simulation.run({ seeds: N })          ← lives in @simnode/core
+Simulation.run({ seeds: N })          ← lives in @crashlab/core
 │
 ├─ _startMongo()                      → MongoMemoryServer (skipped if not installed)
 │
 └─ for each seed × scenario
    └─ Worker thread (isolated globals)
       ├─ createEnv(seed)              → VirtualClock, PRNG, Scheduler, lightweight mocks
-      │   ├─ try import('@simnode/pg-mock')    → PgMock  | null
-      │   ├─ try import('@simnode/redis-mock') → RedisMock | null
-      │   └─ try import('@simnode/mongo')      → MongoMock | null
+      │   ├─ try import('@crashlab/pg-mock')    → PgMock  | null
+      │   ├─ try import('@crashlab/redis-mock') → RedisMock | null
+      │   └─ try import('@crashlab/mongo')      → MongoMock | null
       ├─ install patches              → Date.now, Math.random, net.createConnection, fetch
       ├─ import(scenario)             → dynamic ES module load (file-based)
       ├─ await scenarioFn(env)
@@ -362,7 +362,7 @@ Each worker is fully isolated. Patches applied inside one worker never leak to t
 ## Contributing
 
 ```sh
-git clone https://github.com/simnodehq/simnode
+git clone https://github.com/simnodehq/crashlab
 npm install
 npm run build
 npm test           # vitest — 182 tests

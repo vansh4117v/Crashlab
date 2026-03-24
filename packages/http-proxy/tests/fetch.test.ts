@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { install, HttpInterceptor } from '../src/index.js';
-import { VirtualClock } from '@simnode/clock';
-import { Scheduler } from '@simnode/scheduler';
+import { VirtualClock } from '@crashlab/clock';
+import { Scheduler } from '@crashlab/scheduler';
 
 describe('FETCH / undici patch', () => {
   let clock: VirtualClock;

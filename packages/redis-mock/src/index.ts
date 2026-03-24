@@ -1,5 +1,5 @@
 /**
- * @simnode/redis-mock
+ * @crashlab/redis-mock
  *
  * Pure in-memory Redis mock backed by ioredis-mock.  No external Redis
  * binary or compilation step is needed.  Incoming RESP commands from the
@@ -7,7 +7,7 @@
  * results are encoded back into RESP wire format.
  */
 
-import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@simnode/tcp';
+import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@crashlab/tcp';
 import Redis from 'ioredis-mock';
 
 // ---------------------------------------------------------------------------

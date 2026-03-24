@@ -1,4 +1,4 @@
-# @simnode/http-proxy — API Reference
+# @crashlab/http-proxy — API Reference
 
 ## Responsibility
 

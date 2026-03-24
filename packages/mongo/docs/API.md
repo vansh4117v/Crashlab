@@ -1,4 +1,4 @@
-# @simnode/mongo — API Reference
+# @crashlab/mongo — API Reference
 
 ## Responsibility
 

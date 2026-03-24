@@ -1,4 +1,4 @@
-# @simnode/pg-mock — API Reference
+# @crashlab/pg-mock — API Reference
 
 ## Responsibility
 
@@ -98,7 +98,7 @@ Called automatically by `createEnv()`.
 ## Types
 
 ```ts
-class SimNodeUnsupportedPGFeature extends Error {}
+class CrashLabUnsupportedPGFeature extends Error {}
 ```
 
 Thrown when an unsupported wire-protocol feature is encountered.

@@ -1,4 +1,4 @@
-# @simnode/clock — API Reference
+# @crashlab/clock — API Reference
 
 ## Responsibility
 
@@ -97,7 +97,7 @@ new MinHeap<T>(compareFn: (a: T, b: T) => number)
 Patches `globalThis` timer functions and `Date` to use the provided `VirtualClock`. Called automatically by the simulation worker.
 
 ```ts
-import { install } from '@simnode/clock';
+import { install } from '@crashlab/clock';
 const result = install(clock, { patchNextTick: false });
 // ...
 result.uninstall(); // restore originals

@@ -1,8 +1,8 @@
-# simnode — API Reference
+# crashlab — API Reference
 
 ## Responsibility
 
-The top-level package users install (`npm i simnode`). It orchestrates the entire simulation lifecycle: spawning isolated worker threads per seed, starting a shared MongoDB memory server, driving the virtual clock, and aggregating pass/fail results. Also ships the `simnode` CLI binary (`run`, `replay`, `hunt`).
+The top-level package users install (`npm i crashlab`). It orchestrates the entire simulation lifecycle: spawning isolated worker threads per seed, starting a shared MongoDB memory server, driving the virtual clock, and aggregating pass/fail results. Also ships the `crashlab` CLI binary (`run`, `replay`, `hunt`).
 
 ---
 
@@ -140,15 +140,15 @@ The environment object passed to every scenario function.
 ```ts
 interface SimEnv {
   seed: number;
-  clock: VirtualClock;       // @simnode/clock
-  random: SeededRandom;      // @simnode/random
-  scheduler: Scheduler;      // @simnode/scheduler
-  http: HttpInterceptor;     // @simnode/http-proxy
-  tcp: TcpInterceptor;       // @simnode/tcp
-  fs: VirtualFS;             // @simnode/filesystem
-  pg: PgMock;                // @simnode/pg-mock
-  redis: RedisMock;          // @simnode/redis-mock
-  mongo: MongoMock;          // @simnode/mongo
+  clock: VirtualClock;       // @crashlab/clock
+  random: SeededRandom;      // @crashlab/random
+  scheduler: Scheduler;      // @crashlab/scheduler
+  http: HttpInterceptor;     // @crashlab/http-proxy
+  tcp: TcpInterceptor;       // @crashlab/tcp
+  fs: VirtualFS;             // @crashlab/filesystem
+  pg: PgMock;                // @crashlab/pg-mock
+  redis: RedisMock;          // @crashlab/redis-mock
+  mongo: MongoMock;          // @crashlab/mongo
   faults: FaultInjector;
   timeline: Timeline;
   pump: (ms: number, steps?: number) => Promise<void>;
@@ -165,7 +165,7 @@ Both methods advance virtual time, but they serve different purposes:
 | **Use case** | All pure-virtual scenarios (mocked HTTP, mocked TCP, mocked DB) | Integration scenarios that drive real TCP connections (e.g. a running Express server via supertest) |
 | **Performance** | Instantaneous — no wall-clock time passes | Slow — each step waits ~1ms of real time |
 
-**Use `clock.advance()` for the vast majority of scenarios.** It is the correct tool whenever all I/O passes through SimNode's mock layer (HttpInterceptor, TcpInterceptor, PgMock, etc.).
+**Use `clock.advance()` for the vast majority of scenarios.** It is the correct tool whenever all I/O passes through CrashLab's mock layer (HttpInterceptor, TcpInterceptor, PgMock, etc.).
 
 **Use `pump()` only** when your scenario starts a real TCP server (e.g. `app.listen()`) and makes requests against it. In that case, the request/response cycle goes through the real Node.js event loop and must be processed before the scheduler can drain its mock completions.
 
@@ -215,12 +215,12 @@ class FaultInjector {
 
 ## CLI
 
-Installed as `simnode` binary (also available via `npx simnode`).
+Installed as `crashlab` binary (also available via `npx crashlab`).
 
 ```
-simnode run    [--config=<path>] [--seeds=<N>] [--stop-on-first-failure=<bool>]
-simnode replay --seed=<N> --scenario="<name>" [--config=<path>]
-simnode hunt   <scenario-path> [--timeout=<duration>]
+crashlab run    [--config=<path>] [--seeds=<N>] [--stop-on-first-failure=<bool>]
+crashlab replay --seed=<N> --scenario="<name>" [--config=<path>]
+crashlab hunt   <scenario-path> [--timeout=<duration>]
 ```
 
 **Duration format:** `30s` | `5m` | `1h`
@@ -228,8 +228,8 @@ simnode hunt   <scenario-path> [--timeout=<duration>]
 ### Config file format
 
 ```js
-// simnode.config.js
-import { Simulation } from 'simnode';
+// crashlab.config.js
+import { Simulation } from 'crashlab';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

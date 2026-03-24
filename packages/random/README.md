@@ -1,11 +1,11 @@
-# @simnode/random
+# @crashlab/random
 
 Deterministic seeded PRNG for Node.js, backed by the Mulberry32 algorithm.
 
 ## Usage
 
 ```ts
-import { mulberry32, SeededRandom, patchMathRandom } from '@simnode/random';
+import { mulberry32, SeededRandom, patchMathRandom } from '@crashlab/random';
 
 // Low-level
 const rng = mulberry32(42);

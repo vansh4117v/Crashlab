@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import type * as netTypes from 'node:net';
-import { VirtualClock } from '@simnode/clock';
-import { Scheduler } from '@simnode/scheduler';
-import { TcpInterceptor, SimNodeUnmockedTCPConnectionError } from '@simnode/tcp';
-import { PgMock } from '@simnode/pg-mock';
-import { RedisMock } from '@simnode/redis-mock';
-import { Simulation } from 'simnode';
-import type { SimEnv } from 'simnode';
+import { VirtualClock } from '@crashlab/clock';
+import { Scheduler } from '@crashlab/scheduler';
+import { TcpInterceptor, SimNodeUnmockedTCPConnectionError } from '@crashlab/tcp';
+import { PgMock } from '@crashlab/pg-mock';
+import { RedisMock } from '@crashlab/redis-mock';
+import { Simulation } from 'crashlab';
+import type { SimEnv } from 'crashlab';
 
 const _require = createRequire(import.meta.url);
 const net: typeof netTypes = _require('node:net');
