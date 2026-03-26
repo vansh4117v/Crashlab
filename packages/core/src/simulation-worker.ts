@@ -161,7 +161,7 @@ async function main(): Promise<void> {
       const msg = err instanceof Error ? err.message : String(err);
       if (scenarioPath.endsWith('.ts') && /unknown file extension|\.ts/i.test(msg)) {
         throw new Error(
-          `[SimNode] Cannot import TypeScript scenario directly: ${scenarioPath}\n` +
+          `[Crashlab] Cannot import TypeScript scenario directly: ${scenarioPath}\n` +
           `Run Node with a TypeScript loader, e.g.: node --import tsx/esm  or  node --loader ts-node/esm`,
         );
       }
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
   } catch (err) {
     passed = false;
     error = err instanceof Error ? err.message : String(err);
-    if (err instanceof Error && err.name === 'SimNodeUnsupportedProtocolError') {
+    if (err instanceof Error && err.name === 'CrashlabUnsupportedProtocolError') {
       env.timeline.record({ timestamp: env.clock.now(), type: 'BLOCKED_PROTOCOL', detail: error });
     }
     env.timeline.record({ timestamp: env.clock.now(), type: 'FAIL', detail: error });

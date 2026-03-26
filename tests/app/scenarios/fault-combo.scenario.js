@@ -1,6 +1,6 @@
 // Fault injection combo scenario
 //
-// Tests SimNode's fault injection features together:
+// Tests Crashlab's fault injection features together:
 // 1. Clock skew — verify JWT expiry is affected
 // 2. Disk full — verify audit log failure is handled gracefully
 // 3. Slow database — verify requests still complete under high latency
@@ -62,7 +62,7 @@ export default async function faultCombo(env) {
   if (expiredRes.status !== 401) {
     throw new Error(
       `Clock advance did not expire JWT! Expected 401 but got ${expiredRes.status}.\n` +
-      `This means SimNode's virtual clock is not affecting jwt.verify().`
+      `This means Crashlab's virtual clock is not affecting jwt.verify().`
     );
   }
 

@@ -1,10 +1,10 @@
 import type { TcpMockHandler, TcpMockContext, TcpHandlerResult } from '@crashlab/tcp';
 import * as proto from './protocol.js';
 
-export class SimNodeUnsupportedPGFeature extends Error {
+export class CrashlabUnsupportedPGFeature extends Error {
   constructor(detail: string) {
-    super(`SimNode: Unsupported PostgreSQL feature: ${detail}`);
-    this.name = 'SimNodeUnsupportedPGFeature';
+    super(`Crashlab: Unsupported PostgreSQL feature: ${detail}`);
+    this.name = 'CrashlabUnsupportedPGFeature';
   }
 }
 

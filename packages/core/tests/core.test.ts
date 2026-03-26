@@ -132,7 +132,7 @@ describe('Simulation harness', () => {
   }, 30_000);
 
   it('applies per-seed Mongo URI patch before scenario import', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'simnode-scenario-'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'crashlab-scenario-'));
     const scenarioPath = join(tempDir, 'mongo-capture.mjs');
 
     writeFileSync(
@@ -164,7 +164,7 @@ describe('Simulation harness', () => {
   }, 30_000);
 
   it('intercepts top-level TCP side effects during scenario import', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'simnode-scenario-'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'crashlab-scenario-'));
     const depPath = join(tempDir, 'top-level-net.mjs');
     const scenarioPath = join(tempDir, 'scenario.mjs');
 
@@ -201,14 +201,14 @@ describe('Simulation harness', () => {
       sim.scenario('import side effects are intercepted', scenarioPath);
 
       const replayed = await sim.replay({ seed: 0, scenario: 'import side effects are intercepted' });
-      expect(replayed.result.timeline).toContain('TOP_LEVEL_NET: SimNodeUnmockedTCPConnectionError');
+      expect(replayed.result.timeline).toContain('TOP_LEVEL_NET: CrashlabUnmockedTCPConnectionError');
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
   }, 30_000);
 
   it('patches Mongo URI without explicit /db path before scenario import', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'simnode-scenario-'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'crashlab-scenario-'));
     const scenarioPath = join(tempDir, 'mongo-capture-nodb.mjs');
 
     writeFileSync(
@@ -240,7 +240,7 @@ describe('Simulation harness', () => {
   }, 30_000);
 
   it('preserves holdDrain during pump when tcp.mock barrier exits', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'simnode-scenario-'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'crashlab-scenario-'));
     const scenarioPath = join(tempDir, 'hold-drain-barrier.mjs');
 
     writeFileSync(
@@ -284,7 +284,7 @@ describe('Simulation harness', () => {
   }, 30_000);
   
   it('ignores remock latency change when active sockets already exist', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'simnode-scenario-'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'crashlab-scenario-'));
     const scenarioPath = join(tempDir, 'remock-active-sockets.mjs');
     
     writeFileSync(

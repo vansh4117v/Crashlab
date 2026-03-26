@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import type * as netTypes from 'node:net';
-import { TcpInterceptor, VirtualSocket, SimNodeUnmockedTCPConnectionError } from '../src/index.js';
+import { TcpInterceptor, VirtualSocket, CrashlabUnmockedTCPConnectionError } from '../src/index.js';
 import { VirtualClock } from '@crashlab/clock';
 import { Scheduler } from '@crashlab/scheduler';
 
@@ -371,15 +371,15 @@ describe('virtual latency with clock', () => {
 // 5. Unmocked connections throw
 
 describe('unmocked TCP safety', () => {
-  it('throws SimNodeUnmockedTCPConnectionError for unknown hosts', () => {
+  it('throws CrashlabUnmockedTCPConnectionError for unknown hosts', () => {
     interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.install();
 
     expect(() => net.createConnection(9999, 'unknown.host'))
-      .toThrow(SimNodeUnmockedTCPConnectionError);
+      .toThrow(CrashlabUnmockedTCPConnectionError);
   });
 
-  it('MySQL (port 3306) throws SimNodeUnsupportedProtocolError', () => {
+  it('MySQL (port 3306) throws CrashlabUnsupportedProtocolError', () => {
     interceptor = new TcpInterceptor({ scheduler: new Scheduler({ prngSeed: 1 }) });
     interceptor.install();
 

@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { VirtualSocket } from './VirtualSocket.js';
 import { patchDns, registerMockedHost, clearMockedHosts, dnsConfig } from './dns.js';
 import type { IClock, IScheduler, TcpMockConfig, TcpMockHandler } from './types.js';
-import { SimNodeUnmockedTCPConnectionError, SimNodeUnsupportedProtocolError } from './types.js';
+import { CrashlabUnmockedTCPConnectionError, CrashlabUnsupportedProtocolError } from './types.js';
 
 // CJS reference for mutable patching (same technique as @crashlab/http-proxy)
 const _require = createRequire(import.meta.url);
@@ -116,7 +116,7 @@ export class TcpInterceptor {
       this._clock.setTimeout(() => { this._partitioned = false; }, duration);
     } else {
       console.warn(
-        'SimNode: TcpInterceptor.blockAll() called without a virtual clock. ' +
+        'Crashlab: TcpInterceptor.blockAll() called without a virtual clock. ' +
         'Falling back to real setTimeout — partition duration will be wall-clock, not deterministic.',
       );
       setTimeout(() => { this._partitioned = false; }, duration);
@@ -198,7 +198,7 @@ export class TcpInterceptor {
           clock.setTimeout(() => { void deliver(); }, effectiveLatency);
         } else {
           socket.destroy(new Error(
-            '[SimNode] local server: a Scheduler is required for deterministic I/O delivery. ' +
+            '[Crashlab] local server: a Scheduler is required for deterministic I/O delivery. ' +
             'Pass { scheduler } when constructing TcpInterceptor.',
           ));
         }
@@ -414,19 +414,19 @@ export class TcpInterceptor {
   private _intercept(host: string, port: number): VirtualSocket {
     if (this._partitioned) {
       throw Object.assign(
-        new Error(`SimNode: Network partition active — TCP connection to ${host}:${port} rejected`),
+        new Error(`Crashlab: Network partition active — TCP connection to ${host}:${port} rejected`),
         { code: 'ECONNREFUSED' },
       );
     }
 
     // Explicitly unsupported protocols — give a clear, actionable error
-    if (port === 3306) throw new SimNodeUnsupportedProtocolError('MySQL');
+    if (port === 3306) throw new CrashlabUnsupportedProtocolError('MySQL');
 
     const key = `${normalizeHost(host)}:${port}`;
     const config = this._mocks.get(key);
 
     if (!config) {
-      throw new SimNodeUnmockedTCPConnectionError(host, port);
+      throw new CrashlabUnmockedTCPConnectionError(host, port);
     }
 
     // Dynamic latency getter: reads from the live _mocks map on every write

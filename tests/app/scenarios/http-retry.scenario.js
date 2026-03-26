@@ -47,7 +47,7 @@ export default async function httpRetryUnderPartition(env) {
   );
 
   // Advance clock past the rate-limit window (100ms).
-  // SimNode's virtual clock starts at 0, exposing a bug in the rate limiter:
+  // Crashlab's virtual clock starts at 0, exposing a bug in the rate limiter:
   // `rateLimits.get(userId) || 0` treats first request as if last was at t=0,
   // so Date.now() - 0 < 100 → always rate-limited. Real clocks never hit this.
   await env.clock.advance(200);

@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- Add extensive runtime trace logging (`SimNodeTrace`) across core worker setup, scheduler enqueue/shuffle/execute, and TCP interceptor/VirtualSocket paths to debug replay determinism differences between outcomes.
+- Add extensive runtime trace logging (`CrashlabTrace`) across core worker setup, scheduler enqueue/shuffle/execute, and TCP interceptor/VirtualSocket paths to debug replay determinism differences between outcomes.
   - @crashlab/core@0.1.15
   - @crashlab/mongo@0.1.15
   - @crashlab/pg-mock@0.1.15

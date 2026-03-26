@@ -23,7 +23,7 @@ function _resolveWorkerScript(): string {
   const found = candidates.find(p => existsSync(p));
   if (!found) {
     throw new Error(
-      `SimNode: Cannot locate simulation-worker.js. Searched:\n` +
+      `Crashlab: Cannot locate simulation-worker.js. Searched:\n` +
       candidates.map(p => `  - ${p}`).join('\n') +
       `\nRun \`npm run build\` in @crashlab/core first.`,
     );
@@ -52,7 +52,7 @@ function _resolveScenarioPath(raw: string): string {
   }
 
   throw new Error(
-    `[SimNode] Scenario file not found. Tried:\n` +
+    `[Crashlab] Scenario file not found. Tried:\n` +
     tried.map(p => `  ${p}`).join('\n'),
   );
 }
@@ -287,7 +287,7 @@ async function _startMongo(): Promise<MongoServerInfo> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(
-      `[SimNode] MongoDB memory server failed to start: ${msg}\n` +
+      `[Crashlab] MongoDB memory server failed to start: ${msg}\n` +
       `  Scenarios that use MongoDB will fail. Install mongodb-memory-server or check its binary.`,
     );
     return { host: '127.0.0.1', port: 0, started: false, stop: async () => {} };

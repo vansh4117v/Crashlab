@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import type * as netTypes from 'node:net';
 import { VirtualClock } from '@crashlab/clock';
 import { Scheduler } from '@crashlab/scheduler';
-import { TcpInterceptor, SimNodeUnmockedTCPConnectionError } from '@crashlab/tcp';
+import { TcpInterceptor, CrashlabUnmockedTCPConnectionError } from '@crashlab/tcp';
 import { PgMock } from '@crashlab/pg-mock';
 import { RedisMock } from '@crashlab/redis-mock';
 import { Simulation } from 'crashlab';
@@ -159,10 +159,10 @@ describe('Simulation seed replay', () => {
 
 /* ── D) Unmocked TCP throws ────────────────────────── */
 // The scenario imports `node:net` directly inside the worker context so it
-// does not need the outer-scope `net` or `SimNodeUnmockedTCPConnectionError`.
+// does not need the outer-scope `net` or `CrashlabUnmockedTCPConnectionError`.
 
 describe('Unmocked TCP safety', () => {
-  it('throws SimNodeUnmockedTCPConnectionError during simulation', async () => {
+  it('throws CrashlabUnmockedTCPConnectionError during simulation', async () => {
     const sim = new Simulation();
     sim.scenario('unmocked', async (env: SimEnv) => {
       // env.tcp is already installed by the Simulation runner (simulation-worker.ts).
@@ -173,7 +173,7 @@ describe('Unmocked TCP safety', () => {
         throw new Error('Should not reach');
       } catch (e: unknown) {
         const err = e as { name?: string; message?: string };
-        if (err.name === 'SimNodeUnmockedTCPConnectionError') {
+        if (err.name === 'CrashlabUnmockedTCPConnectionError') {
           env.timeline.record({ timestamp: 0, type: 'GUARD', detail: 'Correctly blocked' });
           return;
         }

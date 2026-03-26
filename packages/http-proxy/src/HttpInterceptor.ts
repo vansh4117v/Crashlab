@@ -228,7 +228,7 @@ export class HttpInterceptor {
       this._clock.setTimeout(() => { this._partitioned = false; }, duration);
     } else {
       console.warn(
-        'SimNode: HttpInterceptor.blockAll() called without a virtual clock. ' +
+        'Crashlab: HttpInterceptor.blockAll() called without a virtual clock. ' +
         'Falling back to real setTimeout — partition duration will be wall-clock, not deterministic.',
       );
       setTimeout(() => { this._partitioned = false; }, duration);
@@ -369,7 +369,7 @@ export class HttpInterceptor {
         this._clock.setTimeout(deliver, latency);
       } else {
         throw new Error(
-          '[SimNode] HttpInterceptor: a Scheduler is required for deterministic delivery. ' +
+          '[Crashlab] HttpInterceptor: a Scheduler is required for deterministic delivery. ' +
           'Pass { scheduler } when constructing HttpInterceptor.',
         );
       }

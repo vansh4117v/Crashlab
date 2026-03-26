@@ -53,24 +53,23 @@ export interface TcpMockConfig {
 }
 
 /** Thrown when a TCP connection is attempted without a registered mock. */
-export class SimNodeUnmockedTCPConnectionError extends Error {
+export class CrashlabUnmockedTCPConnectionError extends Error {
   constructor(host: string, port: number) {
     super(
-      `SimNode: No TCP mock registered for ${host}:${port}. ` +
-      `All outbound TCP connections must be mocked during simulation. ` +
-      `Register a mock with: interceptor.mock("${host}:${port}", { handler })`,
+      `Crashlab: No TCP mock registered for ${host}:${port}. ` +
+      `Ensure env.tcp.mock('${host}:${port}') was called.`,
     );
-    this.name = 'SimNodeUnmockedTCPConnectionError';
+    this.name = 'CrashlabUnmockedTCPConnectionError';
   }
 }
 
 /** Thrown when a connection to an explicitly unsupported protocol port is attempted. */
-export class SimNodeUnsupportedProtocolError extends Error {
+export class CrashlabUnsupportedProtocolError extends Error {
   constructor(protocol: string) {
     super(
-      `SimNode: ${protocol} is not supported in v1.0. ` +
-      `Only PostgreSQL (5432), Redis (6379), and MongoDB (27017) are available.`,
+      `Crashlab: ${protocol} is not supported in v1.0. ` +
+      `Consider patching the driver connection function directly.`,
     );
-    this.name = 'SimNodeUnsupportedProtocolError';
+    this.name = 'CrashlabUnsupportedProtocolError';
   }
 }

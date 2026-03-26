@@ -362,7 +362,7 @@ Each worker is fully isolated. Patches applied inside one worker never leak to t
 ## Contributing
 
 ```sh
-git clone https://github.com/simnodehq/crashlab
+git clone https://github.com/vansh4117v/crashlab
 npm install
 npm run build
 npm test           # vitest — 182 tests

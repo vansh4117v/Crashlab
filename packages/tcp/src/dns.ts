@@ -124,7 +124,7 @@ export function patchDns(originals: Record<string, any>) {
     // Not mocked — pass through but this may reach real network.
     // If originals.resolve6 exists use it; otherwise reject.
     if (originals.resolve6) return originals.resolve6.apply(dns, [hostname, options, callback]);
-    const err = Object.assign(new Error(`SimNode: dns.resolve6 for unmocked host ${hostname}`), { code: 'ENOTFOUND' });
+    const err = Object.assign(new Error(`Crashlab: dns.resolve6 for unmocked host ${hostname}`), { code: 'ENOTFOUND' });
     if (cb) { process.nextTick(() => cb(err)); return; }
     return Promise.reject(err);
   };

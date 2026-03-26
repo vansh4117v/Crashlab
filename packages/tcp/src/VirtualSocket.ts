@@ -114,7 +114,7 @@ export class VirtualSocket extends Duplex {
       this._clock.setTimeout(() => { void deliver(); }, latency);
     } else {
       callback(new Error(
-        '[SimNode] VirtualSocket: a Scheduler is required for deterministic I/O delivery. ' +
+        '[Crashlab] VirtualSocket: a Scheduler is required for deterministic I/O delivery. ' +
         'Pass { scheduler } when constructing TcpInterceptor.',
       ));
       return;
